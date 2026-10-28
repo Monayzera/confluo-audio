@@ -70,6 +70,7 @@ final class RAOPSession {
     private var remoteControl: SocketAddress?
     private var remoteTiming: SocketAddress?
     private var timingTimer: DispatchSourceTimer?
+    private var clock = RAOPClock(ticksPerSecond: HostClock.ticksPerSecond)
     private var sampleRate = 44_100.0
     private var baseRTP: UInt32?
     private var lastRTP: UInt32 = 0
@@ -425,7 +426,8 @@ final class RAOPSession {
         establishBase(rtpNow)
         let extra = UInt32((Double(Self.receiverLatencyFrames) * sampleRate / 44_100).rounded())
         let audible = rtpLessLatency &- extra
-        cf_source_set_anchor(mixer, slot, arrival, Double(extendedIndex(audible)))
+        let host = clock.hostTime(for: Self.read64(bytes, 8), at: arrival) ?? arrival
+        cf_source_set_anchor(mixer, slot, host, Double(extendedIndex(audible)))
     }
 
     private func ingest(_ packet: UnsafeRawBufferPointer, retransmitted: Bool) {
@@ -479,7 +481,14 @@ final class RAOPSession {
     }
 
     private func handleTimingPacket(_ bytes: UnsafeRawBufferPointer) {
-        guard bytes.count >= 32, bytes[1] & 0x7F == 0x52, let timingSocket, let remoteTiming else { return }
+        guard bytes.count >= 32 else { return }
+        let host = HostClock.now()
+        let type = bytes[1] & 0x7F
+        if type == 0x53 {
+            clock.received(origin: Self.read64(bytes, 8), remoteReceived: Self.read64(bytes, 16), remoteSent: Self.read64(bytes, 24), at: host)
+            return
+        }
+        guard type == 0x52, let timingSocket, let remoteTiming else { return }
         let received = Self.ntpNow()
         var reply = [UInt8](repeating: 0, count: 32)
         reply[0] = 0x80
@@ -511,7 +520,9 @@ final class RAOPSession {
         request[0] = 0x80
         request[1] = 0xD2
         request[3] = 0x07
-        Self.write64(&request, 24, Self.ntpNow())
+        let timestamp = Self.ntpNow()
+        Self.write64(&request, 24, timestamp)
+        clock.sent(timestamp, at: HostClock.now())
         timingSocket.send(request, to: remoteTiming)
     }
 
@@ -548,6 +559,10 @@ final class RAOPSession {
 
     static func read32(_ bytes: UnsafeRawBufferPointer, _ offset: Int) -> UInt32 {
         UInt32(bytes[offset]) << 24 | UInt32(bytes[offset + 1]) << 16 | UInt32(bytes[offset + 2]) << 8 | UInt32(bytes[offset + 3])
+    }
+
+    static func read64(_ bytes: UnsafeRawBufferPointer, _ offset: Int) -> UInt64 {
+        UInt64(read32(bytes, offset)) << 32 | UInt64(read32(bytes, offset + 4))
     }
 
     static func write64(_ bytes: inout [UInt8], _ offset: Int, _ value: UInt64) {
