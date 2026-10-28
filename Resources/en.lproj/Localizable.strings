@@ -1,0 +1,77 @@
+"action.disconnect" = "Disconnect";
+"action.dismiss" = "Dismiss";
+"action.mute" = "Mute";
+"action.unmute" = "Unmute";
+"action.solo" = "Solo";
+"action.next" = "Next track";
+"action.previous" = "Previous track";
+"action.playPause" = "Play/Pause";
+"action.openWindow" = "Open Confluo window";
+"action.quit" = "Quit Confluo";
+
+"section.mixer" = "Mixer";
+"section.devices" = "Devices";
+"section.shortcuts" = "Shortcuts";
+"section.settings" = "Settings";
+
+"master.title" = "Master volume";
+"source.mac" = "This Mac";
+"source.status.playing" = "Playing";
+"source.status.idle" = "Silent";
+"source.status.muted" = "Muted";
+"source.status.captureOff" = "Capture off";
+"source.unknownTrack" = "Unknown track";
+
+"empty.title" = "No iPhone connected";
+"empty.body" = "On your iPhone, open Control Center, tap the AirPlay icon and choose “%@”.";
+
+"receiver.ready" = "AirPlay receiver ready";
+"receiver.starting" = "Starting receiver…";
+"receiver.failed" = "Receiver unavailable";
+"receiver.stopped" = "Receiver stopped";
+
+"devices.header" = "Remembered devices";
+"devices.empty" = "No device has connected yet.";
+"devices.footer" = "Devices connect from the iPhone itself: Control Center → AirPlay → “%@”. Mute preferences are restored on the next connection.";
+"devices.lastSeen" = "Last seen %@";
+"devices.connected" = "Connected";
+"devices.mutedHint" = "Starts muted";
+"devices.forget" = "Forget";
+
+"hotkey.toggleExternalMute" = "Mute or unmute iPhones";
+"hotkey.masterUp" = "Master volume up";
+"hotkey.masterDown" = "Master volume down";
+"hotkey.openMixer" = "Open mixer";
+"hotkey.none" = "Not set";
+"hotkey.recording" = "Press keys…";
+"hotkey.clear" = "Clear shortcut";
+"hotkey.reset" = "Restore default shortcuts";
+"hotkey.unavailable" = "In use by another app";
+"hotkey.footer" = "Shortcuts work while Confluo runs in the background. Use ⌃, ⌥ or ⌘ in the combination. Esc cancels, Delete clears.";
+
+"settings.receiver" = "AirPlay receiver";
+"settings.receiverName" = "Name shown on iPhone";
+"settings.receiverFooter" = "Leave empty to use this Mac’s name.";
+"settings.apply" = "Apply";
+"settings.audio" = "Audio";
+"settings.captureMac" = "Mix this Mac’s audio";
+"settings.captureMacFooter" = "Confluo captures the sound from apps on this Mac so it gets its own volume. macOS asks for System Audio Recording permission the first time.";
+"settings.general" = "General";
+"settings.launchAtLogin" = "Open at login";
+"settings.loginApproval" = "macOS needs your approval in Login Items.";
+"settings.openLoginItems" = "Open Login Items";
+"settings.notifications" = "Notifications";
+"settings.notifyConnect" = "When an iPhone connects";
+"settings.notifyDisconnect" = "When an iPhone disconnects";
+"settings.notifyError" = "When an audio error happens";
+
+"notification.connected" = "%@ connected";
+"notification.connected.body" = "Its audio is now mixed into your output.";
+"notification.disconnected" = "%@ disconnected";
+"notification.disconnected.body" = "The source was removed from the mixer.";
+
+"error.mixer" = "Could not create the audio mixer.";
+"error.output" = "Audio output error: %@";
+"error.capture" = "Could not capture this Mac’s audio: %@";
+"error.receiver" = "AirPlay receiver error: %@";
+"error.login" = "Could not change Open at login: %@";

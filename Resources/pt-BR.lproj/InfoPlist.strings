@@ -1,0 +1,2 @@
+"NSAudioCaptureUsageDescription" = "O Confluo captura o áudio deste Mac para mixá-lo com o do seu iPhone, com volume próprio.";
+"NSLocalNetworkUsageDescription" = "O Confluo recebe o áudio AirPlay do seu iPhone e envia de volta comandos de reproduzir, pausar e volume.";

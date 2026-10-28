@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>pt-BR</string>
+	</array>
+	<key>CFBundleExecutable</key>
+	<string>Confluo</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.monayzera.confluo</string>
+	<key>CFBundleName</key>
+	<string>Confluo</string>
+	<key>CFBundleDisplayName</key>
+	<string>Confluo</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.4</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.music</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>Confluo captures this Mac’s audio so it can be mixed with your iPhone with its own volume.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Confluo receives AirPlay audio from your iPhone and sends play, pause and volume commands back to it.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_raop._tcp</string>
+		<string>_dacp._tcp</string>
+	</array>
+</dict>
+</plist>

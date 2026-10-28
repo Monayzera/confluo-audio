@@ -1,0 +1,77 @@
+"action.disconnect" = "Desconectar";
+"action.dismiss" = "Fechar";
+"action.mute" = "Silenciar";
+"action.unmute" = "Ativar som";
+"action.solo" = "Solo";
+"action.next" = "Próxima faixa";
+"action.previous" = "Faixa anterior";
+"action.playPause" = "Reproduzir/Pausar";
+"action.openWindow" = "Abrir janela do Confluo";
+"action.quit" = "Sair do Confluo";
+
+"section.mixer" = "Mixer";
+"section.devices" = "Aparelhos";
+"section.shortcuts" = "Atalhos";
+"section.settings" = "Ajustes";
+
+"master.title" = "Volume geral";
+"source.mac" = "Este Mac";
+"source.status.playing" = "Tocando";
+"source.status.idle" = "Em silêncio";
+"source.status.muted" = "Silenciado";
+"source.status.captureOff" = "Captura desligada";
+"source.unknownTrack" = "Faixa desconhecida";
+
+"empty.title" = "Nenhum iPhone conectado";
+"empty.body" = "No iPhone, abra a Central de Controle, toque no ícone de AirPlay e escolha “%@”.";
+
+"receiver.ready" = "Receptor AirPlay pronto";
+"receiver.starting" = "Iniciando receptor…";
+"receiver.failed" = "Receptor indisponível";
+"receiver.stopped" = "Receptor parado";
+
+"devices.header" = "Aparelhos lembrados";
+"devices.empty" = "Nenhum aparelho conectou ainda.";
+"devices.footer" = "A conexão é feita pelo próprio iPhone: Central de Controle → AirPlay → “%@”. A preferência de silenciar é restaurada na próxima conexão.";
+"devices.lastSeen" = "Visto por último em %@";
+"devices.connected" = "Conectado";
+"devices.mutedHint" = "Começa silenciado";
+"devices.forget" = "Esquecer";
+
+"hotkey.toggleExternalMute" = "Silenciar ou ativar iPhones";
+"hotkey.masterUp" = "Aumentar volume geral";
+"hotkey.masterDown" = "Diminuir volume geral";
+"hotkey.openMixer" = "Abrir mixer";
+"hotkey.none" = "Não definido";
+"hotkey.recording" = "Pressione as teclas…";
+"hotkey.clear" = "Limpar atalho";
+"hotkey.reset" = "Restaurar atalhos padrão";
+"hotkey.unavailable" = "Em uso por outro app";
+"hotkey.footer" = "Os atalhos funcionam com o Confluo em segundo plano. Use ⌃, ⌥ ou ⌘ na combinação. Esc cancela, Delete limpa.";
+
+"settings.receiver" = "Receptor AirPlay";
+"settings.receiverName" = "Nome exibido no iPhone";
+"settings.receiverFooter" = "Deixe vazio para usar o nome deste Mac.";
+"settings.apply" = "Aplicar";
+"settings.audio" = "Áudio";
+"settings.captureMac" = "Mixar o áudio deste Mac";
+"settings.captureMacFooter" = "O Confluo captura o som dos apps deste Mac para ele ter volume próprio. Na primeira vez, o macOS pede a permissão de Gravação de Áudio do Sistema.";
+"settings.general" = "Geral";
+"settings.launchAtLogin" = "Abrir ao iniciar sessão";
+"settings.loginApproval" = "O macOS precisa da sua aprovação em Itens de Início.";
+"settings.openLoginItems" = "Abrir Itens de Início";
+"settings.notifications" = "Notificações";
+"settings.notifyConnect" = "Quando um iPhone conectar";
+"settings.notifyDisconnect" = "Quando um iPhone desconectar";
+"settings.notifyError" = "Quando ocorrer um erro de áudio";
+
+"notification.connected" = "%@ conectado";
+"notification.connected.body" = "O áudio dele agora está mixado na sua saída.";
+"notification.disconnected" = "%@ desconectado";
+"notification.disconnected.body" = "A fonte foi removida do mixer.";
+
+"error.mixer" = "Não foi possível criar o mixer de áudio.";
+"error.output" = "Erro na saída de áudio: %@";
+"error.capture" = "Não foi possível capturar o áudio deste Mac: %@";
+"error.receiver" = "Erro no receptor AirPlay: %@";
+"error.login" = "Não foi possível alterar Abrir ao iniciar sessão: %@";
