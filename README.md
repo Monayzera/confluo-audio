@@ -7,9 +7,23 @@ iPhones connect over AirPlay, no app needed on the phone.
 
 Get **Confluo-x.y.z.dmg** from the [latest release](https://github.com/Monayzera/confluo-audio/releases/latest), open it and drag **Confluo** to Applications.
 
-The app is not notarized. On first launch macOS blocks it: open **System Settings → Privacy & Security** and click **Open Anyway**. Needed only once; updates install from inside the app.
-
 Then on the iPhone: Control Center → AirPlay → **“Mac name · Confluo”**.
+
+### “Confluo was blocked to protect your Mac”
+
+Confluo is open source and signed, but not notarized by Apple (that requires a paid Apple Developer account), so macOS blocks the first launch. To allow it once:
+
+1. Open Confluo from Applications and dismiss the warning.
+2. Go to **System Settings → Privacy & Security**, scroll to **Security**.
+3. Click **Open Anyway** next to the Confluo message and confirm with your password or Touch ID.
+
+If the button doesn't appear, run this in Terminal and open Confluo again:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Confluo.app
+```
+
+Needed only once. Updates install from inside the app without warnings.
 
 ## Requirements
 

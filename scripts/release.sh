@@ -34,12 +34,6 @@ rm -f "$OUTPUT/$ZIP"
 ditto -c -k --sequesterRsrc --keepParent "$OUTPUT/Confluo.app" "$OUTPUT/$ZIP"
 rm -f "$OUTPUT/$DMG"
 "$DMGBUILD" -s "$ROOT/scripts/dmg/settings.py" -D app="$OUTPUT/Confluo.app" -D assets="$ROOT/scripts/dmg" -D icon="$ROOT/Resources/AppIcon.icns" "Confluo" "$OUTPUT/$DMG"
-KEYCHAIN_ARGS=()
-if [ -n "${CONFLUO_KEYCHAIN:-}" ]; then
-    KEYCHAIN_ARGS=(--keychain "$CONFLUO_KEYCHAIN")
-fi
-codesign --force --sign "${CONFLUO_SIGN_IDENTITY:--}" "${KEYCHAIN_ARGS[@]+"${KEYCHAIN_ARGS[@]}"}" --timestamp=none "$OUTPUT/$DMG"
-
 SIGN_ARGS=(--account confluo)
 if [ -n "${CONFLUO_ED_KEY_FILE:-}" ]; then
     SIGN_ARGS=(--ed-key-file "$CONFLUO_ED_KEY_FILE")
