@@ -5,7 +5,7 @@ iPhones connect over AirPlay, no app needed on the phone.
 
 ## Download
 
-Get **Confluo-x.y.z.zip** from the [latest release](https://github.com/Monayzera/confluo-audio/releases/latest), unzip and move **Confluo.app** to Applications.
+Get **Confluo-x.y.z.dmg** from the [latest release](https://github.com/Monayzera/confluo-audio/releases/latest), open it and drag **Confluo** to Applications.
 
 The app is not notarized. On first launch macOS blocks it: open **System Settings → Privacy & Security** and click **Open Anyway**. Needed only once; updates install from inside the app.
 
@@ -41,7 +41,7 @@ cd confluo-audio
 ./scripts/build-app.sh --install
 ```
 
-Tests: `swift test`. Releases: bump `VERSION`, commit, run `./scripts/release.sh`.
+Tests: `swift test`. Releases: bump `VERSION`, commit, run `./scripts/release.sh` (needs `pip install dmgbuild`).
 
 ## License
 

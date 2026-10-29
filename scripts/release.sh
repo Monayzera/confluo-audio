@@ -6,11 +6,17 @@ REPO="Monayzera/confluo-audio"
 VERSION="$(tr -d '[:space:]' < "$ROOT/VERSION")"
 TAG="v$VERSION"
 OUTPUT="$ROOT/build"
-ZIP="Confluo-$VERSION.zip"
+ZIP="Confluo-$VERSION-update.zip"
+DMG="Confluo-$VERSION.dmg"
+DMGBUILD="${CONFLUO_DMGBUILD:-$(command -v dmgbuild || true)}"
 SIGN_UPDATE="$ROOT/.build/artifacts/sparkle/Sparkle/bin/sign_update"
 NOTES="${1:-}"
 
 cd "$ROOT"
+if [ -z "$DMGBUILD" ]; then
+    echo "dmgbuild not found: pip install dmgbuild, or set CONFLUO_DMGBUILD." >&2
+    exit 1
+fi
 if [ -n "$(git status --porcelain -- Sources Resources Package.swift VERSION scripts)" ]; then
     echo "Commit source changes before releasing." >&2
     exit 1
@@ -26,6 +32,14 @@ MINIMUM="$(/usr/libexec/PlistBuddy -c "Print :LSMinimumSystemVersion" "$OUTPUT/C
 
 rm -f "$OUTPUT/$ZIP"
 ditto -c -k --sequesterRsrc --keepParent "$OUTPUT/Confluo.app" "$OUTPUT/$ZIP"
+rm -f "$OUTPUT/$DMG"
+"$DMGBUILD" -s "$ROOT/scripts/dmg/settings.py" -D app="$OUTPUT/Confluo.app" -D assets="$ROOT/scripts/dmg" -D icon="$ROOT/Resources/AppIcon.icns" "Confluo" "$OUTPUT/$DMG"
+KEYCHAIN_ARGS=()
+if [ -n "${CONFLUO_KEYCHAIN:-}" ]; then
+    KEYCHAIN_ARGS=(--keychain "$CONFLUO_KEYCHAIN")
+fi
+codesign --force --sign "${CONFLUO_SIGN_IDENTITY:--}" "${KEYCHAIN_ARGS[@]+"${KEYCHAIN_ARGS[@]}"}" --timestamp=none "$OUTPUT/$DMG"
+
 SIGN_ARGS=(--account confluo)
 if [ -n "${CONFLUO_ED_KEY_FILE:-}" ]; then
     SIGN_ARGS=(--ed-key-file "$CONFLUO_ED_KEY_FILE")
@@ -55,5 +69,5 @@ NOTES_ARGS=(--generate-notes)
 if [ -n "$NOTES" ]; then
     NOTES_ARGS=(--notes-file "$NOTES")
 fi
-gh release create "$TAG" "$OUTPUT/$ZIP" "$OUTPUT/appcast.xml" --repo "$REPO" --target "$(git rev-parse HEAD)" --title "Confluo $VERSION" "${NOTES_ARGS[@]}"
+gh release create "$TAG" "$OUTPUT/$DMG" "$OUTPUT/$ZIP" "$OUTPUT/appcast.xml" --repo "$REPO" --target "$(git rev-parse HEAD)" --title "Confluo $VERSION" "${NOTES_ARGS[@]}"
 echo "Released $TAG"
