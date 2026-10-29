@@ -26,7 +26,11 @@ MINIMUM="$(/usr/libexec/PlistBuddy -c "Print :LSMinimumSystemVersion" "$OUTPUT/C
 
 rm -f "$OUTPUT/$ZIP"
 ditto -c -k --sequesterRsrc --keepParent "$OUTPUT/Confluo.app" "$OUTPUT/$ZIP"
-SIGNATURE="$("$SIGN_UPDATE" --account confluo "$OUTPUT/$ZIP")"
+SIGN_ARGS=(--account confluo)
+if [ -n "${CONFLUO_ED_KEY_FILE:-}" ]; then
+    SIGN_ARGS=(--ed-key-file "$CONFLUO_ED_KEY_FILE")
+fi
+SIGNATURE="$("$SIGN_UPDATE" "${SIGN_ARGS[@]}" "$OUTPUT/$ZIP")"
 
 cat > "$OUTPUT/appcast.xml" <<XML
 <?xml version="1.0" encoding="utf-8"?>
