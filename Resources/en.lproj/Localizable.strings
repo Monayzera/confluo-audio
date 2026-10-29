@@ -96,3 +96,13 @@
 "menu.close" = "Close";
 "menu.minimize" = "Minimize";
 "key.space" = "Space";
+"hotkey.checkForUpdates" = "Check for updates";
+"updates.header" = "Updates";
+"updates.version" = "Version";
+"updates.autoCheck" = "Check for updates automatically (daily)";
+"updates.autoInstall" = "Download and install updates automatically";
+"updates.check" = "Check for Updates…";
+"updates.lastCheck" = "Last checked %@";
+"update.available" = "Confluo %@ is available";
+"update.available.body" = "Open Confluo from the menu bar to install it.";
+"update.install" = "Install";

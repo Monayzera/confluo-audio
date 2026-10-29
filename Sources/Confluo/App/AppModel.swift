@@ -94,6 +94,7 @@ final class AppModel: RAOPSessionDelegate {
     private(set) var loginItemError: String?
 
     @ObservationIgnored var onOpenMixerRequest: (() -> Void)?
+    @ObservationIgnored let updater = AppUpdater()
     @ObservationIgnored private let store = SettingsStore()
     @ObservationIgnored private let mixer: AudioMixer?
     @ObservationIgnored private var capture: SystemAudioCapture?
@@ -159,6 +160,10 @@ final class AppModel: RAOPSessionDelegate {
         }
         hotkeys.apply(settings.hotkeys)
         hotkeyFailures = hotkeys.failures
+        updater.onUpdateAvailable = { version in
+            Notifier.post(title: L10n.format("update.available", version), body: L10n.string("update.available.body"))
+        }
+        updater.start()
 
         guard let mixer else {
             report(L10n.string("error.mixer"))
@@ -512,6 +517,8 @@ final class AppModel: RAOPSessionDelegate {
             setMasterVolume(settings.masterVolume - 0.05)
         case .openMixer:
             onOpenMixerRequest?()
+        case .checkForUpdates:
+            updater.checkForUpdates()
         }
     }
 

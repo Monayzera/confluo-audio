@@ -218,6 +218,31 @@ struct SettingsPage: View {
             }
 
             Section {
+                LabeledContent(L10n.string("updates.version"), value: AppUpdater.currentVersion)
+                Toggle(L10n.string("updates.autoCheck"), isOn: Binding(get: { model.updater.automaticallyChecks }, set: { model.updater.setAutomaticallyChecks($0) }))
+                Toggle(L10n.string("updates.autoInstall"), isOn: Binding(get: { model.updater.automaticallyInstalls }, set: { model.updater.setAutomaticallyInstalls($0) }))
+                    .disabled(!model.updater.automaticallyChecks)
+                HStack {
+                    if let available = model.updater.availableVersion {
+                        Text(L10n.format("update.available", available))
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(Color(red: 0.47, green: 0.66, blue: 0.93))
+                    } else if let last = model.updater.lastCheck {
+                        Text(L10n.format("updates.lastCheck", last.formatted(date: .abbreviated, time: .shortened)))
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button(L10n.string("updates.check")) {
+                        model.updater.checkForUpdates()
+                    }
+                    .disabled(!model.updater.canCheckForUpdates)
+                }
+            } header: {
+                Text(L10n.string("updates.header"))
+            }
+
+            Section {
                 Toggle(L10n.string("settings.notifyConnect"), isOn: Binding(get: { model.settings.notifyOnConnect }, set: { model.settings.notifyOnConnect = $0 }))
                 Toggle(L10n.string("settings.notifyDisconnect"), isOn: Binding(get: { model.settings.notifyOnDisconnect }, set: { model.settings.notifyOnDisconnect = $0 }))
                 Toggle(L10n.string("settings.notifyError"), isOn: Binding(get: { model.settings.notifyOnError }, set: { model.settings.notifyOnError = $0 }))

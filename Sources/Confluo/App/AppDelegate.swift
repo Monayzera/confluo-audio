@@ -119,10 +119,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         }
     }
 
+    @objc private func checkForUpdates() {
+        model.updater.checkForUpdates()
+    }
+
     private func installMainMenu() {
         let menu = NSMenu()
         let appItem = NSMenuItem()
         let appMenu = NSMenu()
+        let updates = appMenu.addItem(withTitle: L10n.string("updates.check"), action: #selector(checkForUpdates), keyEquivalent: "")
+        updates.target = self
+        appMenu.addItem(.separator())
         appMenu.addItem(withTitle: L10n.string("action.quit"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         appItem.submenu = appMenu
         menu.addItem(appItem)

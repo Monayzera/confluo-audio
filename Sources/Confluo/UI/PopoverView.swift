@@ -48,6 +48,10 @@ struct PopoverView: View {
                 .glassGroup(spacing: 6)
             }
 
+            if let version = model.updater.availableVersion {
+                UpdateBanner(version: version) { model.updater.checkForUpdates() }
+            }
+
             if let error = model.lastError {
                 ErrorBanner(message: error) { model.clearError() }
             }
@@ -61,6 +65,26 @@ struct PopoverView: View {
         }
         .padding(14)
         .frame(width: 380)
+    }
+}
+
+struct UpdateBanner: View {
+    let version: String
+    let install: () -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "arrow.down.circle.fill")
+                .foregroundStyle(Color(red: 0.47, green: 0.66, blue: 0.93))
+            Text(L10n.format("update.available", version))
+                .font(.system(size: 11, weight: .medium))
+            Spacer(minLength: 4)
+            Button(L10n.string("update.install"), action: install)
+                .glassControl(active: true, tint: Color(red: 0.47, green: 0.66, blue: 0.93))
+                .controlSize(.small)
+        }
+        .padding(10)
+        .background(Color(red: 0.47, green: 0.66, blue: 0.93).opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 }
 

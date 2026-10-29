@@ -37,6 +37,18 @@
 	<string>Confluo captures this Mac’s audio so it can be mixed with your iPhone with its own volume.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Confluo receives AirPlay audio from your iPhone and sends play, pause and volume commands back to it.</string>
+	<key>SUFeedURL</key>
+	<string>https://github.com/Monayzera/confluo-audio/releases/latest/download/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>3pYhsJhUYHZV/5huEw0uflnSz2ranNj16ilzxvft8SQ=</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUScheduledCheckInterval</key>
+	<integer>86400</integer>
+	<key>SUAllowsAutomaticUpdates</key>
+	<true/>
+	<key>SUVerifyUpdateBeforeExtraction</key>
+	<true/>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_raop._tcp</string>

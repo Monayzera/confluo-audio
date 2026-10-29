@@ -7,6 +7,7 @@ enum HotkeyAction: String, Codable, CodingKeyRepresentable, CaseIterable, Identi
     case masterUp
     case masterDown
     case openMixer
+    case checkForUpdates
 
     var id: String { rawValue }
 
@@ -16,6 +17,7 @@ enum HotkeyAction: String, Codable, CodingKeyRepresentable, CaseIterable, Identi
         case .masterUp: return "hotkey.masterUp"
         case .masterDown: return "hotkey.masterDown"
         case .openMixer: return "hotkey.openMixer"
+        case .checkForUpdates: return "hotkey.checkForUpdates"
         }
     }
 }
