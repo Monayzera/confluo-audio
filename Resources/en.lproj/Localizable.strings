@@ -17,13 +17,13 @@
 "master.title" = "Master volume";
 "source.mac" = "This Mac";
 "source.status.playing" = "Playing";
-"source.status.idle" = "Silent";
+"source.status.idle" = "No audio";
 "source.status.muted" = "Muted";
 "source.status.captureOff" = "Capture off";
 "source.unknownTrack" = "Unknown track";
 
 "empty.title" = "No iPhone connected";
-"empty.body" = "On your iPhone, open Control Center, tap the AirPlay icon and choose “%@”.";
+"empty.body" = "On your iPhone, open Control Center, tap the AirPlay icon and choose “%@”. The iPhone must be on the same Wi-Fi as this Mac.";
 
 "receiver.ready" = "AirPlay receiver ready";
 "receiver.starting" = "Starting receiver…";
@@ -32,10 +32,9 @@
 
 "devices.header" = "Remembered devices";
 "devices.empty" = "No device has connected yet.";
-"devices.footer" = "Devices connect from the iPhone itself: Control Center → AirPlay → “%@”. Mute preferences are restored on the next connection.";
+"devices.footer" = "Devices connect from the iPhone itself: Control Center → AirPlay → “%@”.";
 "devices.lastSeen" = "Last seen %@";
 "devices.connected" = "Connected";
-"devices.mutedHint" = "Starts muted";
 "devices.forget" = "Forget";
 
 "hotkey.toggleExternalMute" = "Mute or unmute iPhones";
@@ -46,13 +45,12 @@
 "hotkey.recording" = "Press keys…";
 "hotkey.clear" = "Clear shortcut";
 "hotkey.reset" = "Restore default shortcuts";
-"hotkey.unavailable" = "In use by another app";
-"hotkey.footer" = "Shortcuts work while Confluo runs in the background. Use ⌃, ⌥ or ⌘ in the combination. Esc cancels, Delete clears.";
+"hotkey.unavailable" = "Could not register: combination in use or reserved by macOS";
+"hotkey.footer" = "Shortcuts work while Confluo runs in the background. Use at least two modifiers (⌃ ⌥ ⇧ ⌘) or an F key. Esc cancels, Delete clears.";
 
 "settings.receiver" = "AirPlay receiver";
 "settings.receiverName" = "Name shown on iPhone";
 "settings.receiverFooter" = "Leave empty to use this Mac’s name.";
-"settings.apply" = "Apply";
 "settings.audio" = "Audio";
 "settings.captureMac" = "Mix this Mac’s audio";
 "settings.captureMacFooter" = "Confluo captures the sound from apps on this Mac so it gets its own volume. macOS asks for System Audio Recording permission the first time.";
@@ -75,3 +73,26 @@
 "error.capture" = "Could not capture this Mac’s audio: %@";
 "error.receiver" = "AirPlay receiver error: %@";
 "error.login" = "Could not change Open at login: %@";
+"source.status.captureStarting" = "Waiting for permission…";
+"source.status.captureFailed" = "Capture unavailable";
+"source.status.soloMuted" = "Muted by solo";
+"source.delay" = "%.2f s delay";
+"action.enableCapture" = "Turn on";
+"action.openPermissions" = "Open Privacy";
+"action.soloHelp" = "Solo: hear only this source while the others are silenced";
+"settings.latency" = "iPhone latency";
+"settings.latencyFooter" = "Low plays iPhone audio as soon as it arrives (about 0.3 s). Synced with video keeps AirPlay’s 2-second schedule so videos on the iPhone stay in sync.";
+"latency.low" = "Low";
+"latency.balanced" = "Balanced (more stable)";
+"latency.synced" = "Synced with video";
+"menu.edit" = "Edit";
+"menu.undo" = "Undo";
+"menu.redo" = "Redo";
+"menu.cut" = "Cut";
+"menu.copy" = "Copy";
+"menu.paste" = "Paste";
+"menu.selectAll" = "Select All";
+"menu.window" = "Window";
+"menu.close" = "Close";
+"menu.minimize" = "Minimize";
+"key.space" = "Space";

@@ -17,13 +17,13 @@
 "master.title" = "Volume geral";
 "source.mac" = "Este Mac";
 "source.status.playing" = "Tocando";
-"source.status.idle" = "Em silêncio";
+"source.status.idle" = "Sem áudio";
 "source.status.muted" = "Silenciado";
 "source.status.captureOff" = "Captura desligada";
 "source.unknownTrack" = "Faixa desconhecida";
 
 "empty.title" = "Nenhum iPhone conectado";
-"empty.body" = "No iPhone, abra a Central de Controle, toque no ícone de AirPlay e escolha “%@”.";
+"empty.body" = "No iPhone, abra a Central de Controle, toque no ícone de AirPlay e escolha “%@”. O iPhone precisa estar no mesmo Wi-Fi deste Mac.";
 
 "receiver.ready" = "Receptor AirPlay pronto";
 "receiver.starting" = "Iniciando receptor…";
@@ -32,10 +32,9 @@
 
 "devices.header" = "Aparelhos lembrados";
 "devices.empty" = "Nenhum aparelho conectou ainda.";
-"devices.footer" = "A conexão é feita pelo próprio iPhone: Central de Controle → AirPlay → “%@”. A preferência de silenciar é restaurada na próxima conexão.";
+"devices.footer" = "A conexão é feita pelo próprio iPhone: Central de Controle → AirPlay → “%@”.";
 "devices.lastSeen" = "Visto por último em %@";
 "devices.connected" = "Conectado";
-"devices.mutedHint" = "Começa silenciado";
 "devices.forget" = "Esquecer";
 
 "hotkey.toggleExternalMute" = "Silenciar ou ativar iPhones";
@@ -46,13 +45,12 @@
 "hotkey.recording" = "Pressione as teclas…";
 "hotkey.clear" = "Limpar atalho";
 "hotkey.reset" = "Restaurar atalhos padrão";
-"hotkey.unavailable" = "Em uso por outro app";
-"hotkey.footer" = "Os atalhos funcionam com o Confluo em segundo plano. Use ⌃, ⌥ ou ⌘ na combinação. Esc cancela, Delete limpa.";
+"hotkey.unavailable" = "Não foi possível registrar: combinação em uso ou reservada pelo macOS";
+"hotkey.footer" = "Os atalhos funcionam com o Confluo em segundo plano. Use pelo menos dois modificadores (⌃ ⌥ ⇧ ⌘) ou uma tecla F. Esc cancela, Delete limpa.";
 
 "settings.receiver" = "Receptor AirPlay";
 "settings.receiverName" = "Nome exibido no iPhone";
 "settings.receiverFooter" = "Deixe vazio para usar o nome deste Mac.";
-"settings.apply" = "Aplicar";
 "settings.audio" = "Áudio";
 "settings.captureMac" = "Mixar o áudio deste Mac";
 "settings.captureMacFooter" = "O Confluo captura o som dos apps deste Mac para ele ter volume próprio. Na primeira vez, o macOS pede a permissão de Gravação de Áudio do Sistema.";
@@ -75,3 +73,26 @@
 "error.capture" = "Não foi possível capturar o áudio deste Mac: %@";
 "error.receiver" = "Erro no receptor AirPlay: %@";
 "error.login" = "Não foi possível alterar Abrir ao iniciar sessão: %@";
+"source.status.captureStarting" = "Aguardando permissão…";
+"source.status.captureFailed" = "Captura indisponível";
+"source.status.soloMuted" = "Silenciado pelo solo";
+"source.delay" = "atraso de %.2f s";
+"action.enableCapture" = "Ativar";
+"action.openPermissions" = "Abrir Privacidade";
+"action.soloHelp" = "Solo: ouvir só esta fonte enquanto as outras ficam silenciadas";
+"settings.latency" = "Latência do iPhone";
+"settings.latencyFooter" = "Baixa toca o áudio do iPhone assim que ele chega (cerca de 0,3 s). Sincronizada com vídeo mantém o atraso de 2 segundos do AirPlay para vídeos no iPhone ficarem sincronizados.";
+"latency.low" = "Baixa";
+"latency.balanced" = "Equilibrada (mais estável)";
+"latency.synced" = "Sincronizada com vídeo";
+"menu.edit" = "Editar";
+"menu.undo" = "Desfazer";
+"menu.redo" = "Refazer";
+"menu.cut" = "Recortar";
+"menu.copy" = "Copiar";
+"menu.paste" = "Colar";
+"menu.selectAll" = "Selecionar Tudo";
+"menu.window" = "Janela";
+"menu.close" = "Fechar";
+"menu.minimize" = "Minimizar";
+"key.space" = "Espaço";

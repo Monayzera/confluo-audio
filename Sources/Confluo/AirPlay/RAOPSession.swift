@@ -37,6 +37,7 @@ struct SenderInfo: Equatable {
 
 protocol RAOPSessionDelegate: AnyObject {
     func sessionDidBegin(_ session: RAOPSession, sender: SenderInfo)
+    func session(_ session: RAOPSession, didUpdateRemote dacpID: String?, activeRemote: String?)
     func session(_ session: RAOPSession, didChangeVolume decibels: Double)
     func session(_ session: RAOPSession, didChangeMetadata metadata: TrackMetadata)
     func session(_ session: RAOPSession, didChangeArtwork artwork: Data?)
@@ -71,6 +72,13 @@ final class RAOPSession {
     private var remoteTiming: SocketAddress?
     private var timingTimer: DispatchSourceTimer?
     private var clock = RAOPClock(ticksPerSecond: HostClock.ticksPerSecond)
+    private var latencyMode: LatencyMode
+    private var arrivals: [(time: Double, offset: Double)] = []
+    private var lastArrivalAnchor = 0.0
+    private var anchorOffset: Double?
+    private var discardedPackets = 0
+    private var discardBeforeRTP: UInt32?
+    private var pendingSync: (rtpLessLatency: UInt32, ntp: UInt64, arrival: UInt64)?
     private var sampleRate = 44_100.0
     private var baseRTP: UInt32?
     private var lastRTP: UInt32 = 0
@@ -83,8 +91,9 @@ final class RAOPSession {
     private let pcmCapacityFrames = 16_384
     private let decrypted: UnsafeMutableRawBufferPointer
 
-    init(connection: NWConnection, mixer: OpaquePointer, slots: SlotAllocator, hardwareAddress: Data, onClose: @escaping (RAOPSession) -> Void) {
+    init(connection: NWConnection, mixer: OpaquePointer, slots: SlotAllocator, hardwareAddress: Data, latencyMode: LatencyMode, onClose: @escaping (RAOPSession) -> Void) {
         self.connection = connection
+        self.latencyMode = latencyMode
         self.mixer = mixer
         self.slots = slots
         self.hardwareAddress = hardwareAddress
@@ -113,6 +122,17 @@ final class RAOPSession {
             }
         }
         connection.start(queue: queue)
+    }
+
+    func setLatencyMode(_ mode: LatencyMode) {
+        queue.async { [weak self] in
+            guard let self, self.latencyMode != mode else { return }
+            self.latencyMode = mode
+            self.arrivals.removeAll()
+            self.lastArrivalAnchor = 0
+            self.anchorOffset = nil
+            self.applyCompensation()
+        }
     }
 
     func disconnect() {
@@ -175,9 +195,14 @@ final class RAOPSession {
         case "SETUP":
             return merge(response, handleSetup(request))
         case "RECORD":
+            if baseRTP != nil {
+                flushTimeline()
+            }
+            applyRTPInfo(request)
             response.add("Audio-Latency", "\(Self.receiverLatencyFrames)")
         case "FLUSH":
             flushTimeline()
+            applyRTPInfo(request)
         case "TEARDOWN", "PAUSE":
             break
         case "SET_PARAMETER":
@@ -221,12 +246,36 @@ final class RAOPSession {
         return try? RAOPCrypto.challengeResponse(challenge: challengeData, localAddress: address, hardwareAddress: hardwareAddress)
     }
 
+    private func applyRTPInfo(_ request: RTSPRequest) {
+        guard let info = request.header("RTP-Info") else { return }
+        for component in info.split(separator: ";") {
+            let pair = component.split(separator: "=", maxSplits: 1)
+            guard pair.count == 2 else { continue }
+            let key = pair[0].trimmingCharacters(in: .whitespaces)
+            let value = pair[1].trimmingCharacters(in: .whitespaces)
+            if key == "rtptime", let rtp = UInt32(value) {
+                discardBeforeRTP = rtp
+            } else if key == "seq", let sequence = UInt16(value) {
+                expectedSequence = sequence
+            }
+        }
+    }
+
     private func updateRemoteIdentity(_ request: RTSPRequest) {
+        let previous = (dacpID, activeRemote)
         if let value = request.header("DACP-ID"), !value.isEmpty {
             dacpID = value
         }
         if let value = request.header("Active-Remote"), !value.isEmpty {
             activeRemote = value
+        }
+        if began && (previous.0 != dacpID || previous.1 != activeRemote) {
+            let dacp = dacpID
+            let remote = activeRemote
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.delegate?.session(self, didUpdateRemote: dacp, activeRemote: remote)
+            }
         }
         if let value = request.header("X-Apple-Client-Name"), !value.isEmpty {
             senderName = value
@@ -258,6 +307,9 @@ final class RAOPSession {
         if request.header("X-Apple-Client-Name") == nil, let name = description.senderName {
             senderName = name
         }
+        guard (8_000...192_000).contains(description.sampleRate) else {
+            return .status(400, "Bad Request")
+        }
         sampleRate = description.sampleRate
         if slot == nil {
             guard let acquired = slots.acquire() else {
@@ -267,6 +319,7 @@ final class RAOPSession {
         }
         guard let slot else { return .status(500, "Internal Server Error") }
         cf_source_begin(mixer, slot, CF_MODE_TIMED, sampleRate)
+        applyCompensation()
         resetTimeline()
         if !began {
             began = true
@@ -314,6 +367,11 @@ final class RAOPSession {
         }
         remoteControl = SocketAddress(host: host, port: controlPort)
         remoteTiming = SocketAddress(host: host, port: timingPort)
+        if let allowed = remoteControl?.storage.sin6_addr {
+            audioSocket?.allowedSource = allowed
+            controlSocket?.allowedSource = allowed
+            timingSocket?.allowedSource = allowed
+        }
         startTimingRequests()
         guard let audioPort = audioSocket?.port, let localControl = controlSocket?.port, let localTiming = timingSocket?.port else {
             return .status(500, "Internal Server Error")
@@ -368,6 +426,17 @@ final class RAOPSession {
         lastRTP = 0
         lastExtended = 0
         expectedSequence = nil
+        arrivals.removeAll()
+        lastArrivalAnchor = 0
+        anchorOffset = nil
+        discardBeforeRTP = nil
+        discardedPackets = 0
+        pendingSync = nil
+    }
+
+    private func applyCompensation() {
+        guard let slot else { return }
+        cf_source_set_latency_compensation(mixer, slot, latencyMode == .synced)
     }
 
     private func flushTimeline() {
@@ -377,10 +446,13 @@ final class RAOPSession {
     }
 
     private func establishBase(_ rtp: UInt32) {
-        if baseRTP == nil {
-            baseRTP = rtp
-            lastRTP = rtp
-            lastExtended = 0
+        guard baseRTP == nil else { return }
+        baseRTP = rtp
+        lastRTP = rtp
+        lastExtended = 0
+        if let pending = pendingSync {
+            pendingSync = nil
+            applySync(rtpLessLatency: pending.rtpLessLatency, ntp: pending.ntp, arrival: pending.arrival)
         }
     }
 
@@ -419,14 +491,22 @@ final class RAOPSession {
     }
 
     private func handleSync(_ bytes: UnsafeRawBufferPointer) {
-        guard let slot else { return }
+        guard slot != nil, latencyMode == .synced else { return }
         let arrival = HostClock.now()
         let rtpLessLatency = Self.read32(bytes, 4)
-        let rtpNow = Self.read32(bytes, 16)
-        establishBase(rtpNow)
-        let extra = UInt32((Double(Self.receiverLatencyFrames) * sampleRate / 44_100).rounded())
+        let ntp = Self.read64(bytes, 8)
+        guard baseRTP != nil else {
+            pendingSync = (rtpLessLatency, ntp, arrival)
+            return
+        }
+        applySync(rtpLessLatency: rtpLessLatency, ntp: ntp, arrival: arrival)
+    }
+
+    private func applySync(rtpLessLatency: UInt32, ntp: UInt64, arrival: UInt64) {
+        guard let slot, latencyMode == .synced else { return }
+        let extra = UInt32(min(max((Double(Self.receiverLatencyFrames) * sampleRate / 44_100).rounded(), 0), 1_000_000))
         let audible = rtpLessLatency &- extra
-        let host = clock.hostTime(for: Self.read64(bytes, 8), at: arrival) ?? arrival
+        let host = clock.hostTime(for: ntp, at: arrival) ?? arrival
         cf_source_set_anchor(mixer, slot, host, Double(extendedIndex(audible)))
     }
 
@@ -434,6 +514,24 @@ final class RAOPSession {
         guard let slot, let decoder, packet.count > 12 else { return }
         let sequence = Self.read16(packet, 2)
         let rtp = Self.read32(packet, 4)
+        if let discard = discardBeforeRTP {
+            let distance = Int32(bitPattern: rtp &- discard)
+            if distance < 0 && distance > -Int32(sampleRate * 10) {
+                if !retransmitted {
+                    discardedPackets += 1
+                    expectedSequence = sequence &+ 1
+                    if discardedPackets < 250 {
+                        return
+                    }
+                } else {
+                    return
+                }
+            }
+            if !retransmitted {
+                discardBeforeRTP = nil
+                discardedPackets = 0
+            }
+        }
         if !retransmitted {
             trackSequence(sequence)
         }
@@ -449,13 +547,37 @@ final class RAOPSession {
         guard decoder.maximumFramesPerPacket <= pcmCapacityFrames else { return }
         let frames = decoder.decode(audio, into: pcm)
         guard frames > 0 else { return }
-        let index = advance(rtp)
+        var index = advance(rtp)
         if !cf_source_write(mixer, slot, index, pcm, UInt32(frames)) {
             cf_source_flush(mixer, slot)
             resetTimeline()
-            let restarted = advance(rtp)
-            _ = cf_source_write(mixer, slot, restarted, pcm, UInt32(frames))
+            index = advance(rtp)
+            _ = cf_source_write(mixer, slot, index, pcm, UInt32(frames))
         }
+        if !retransmitted {
+            updateArrivalAnchor(slot: slot, endIndex: index + Int64(frames))
+        }
+    }
+
+    private func updateArrivalAnchor(slot: UInt32, endIndex: Int64) {
+        guard let margin = latencyMode.margin, sampleRate > 0 else { return }
+        let host = HostClock.now()
+        let now = Double(host) / HostClock.ticksPerSecond
+        arrivals.append((now, Double(endIndex) / sampleRate - now))
+        if let firstRecent = arrivals.firstIndex(where: { now - $0.time <= 3 }), firstRecent > 0 {
+            arrivals.removeFirst(firstRecent)
+        }
+        guard now - lastArrivalAnchor >= 0.2, let worst = arrivals.map(\.offset).min() else { return }
+        lastArrivalAnchor = now
+        let offset: Double
+        if let current = anchorOffset, worst > current {
+            offset = current + min(worst - current, 0.0003)
+        } else {
+            offset = worst
+        }
+        anchorOffset = offset
+        let target = (now + offset - margin) * sampleRate
+        cf_source_set_anchor(mixer, slot, host, target)
     }
 
     private func trackSequence(_ sequence: UInt16) {
@@ -470,6 +592,8 @@ final class RAOPSession {
             if gap < 256 {
                 requestResend(first: expected, count: UInt16(gap))
             }
+            expectedSequence = sequence &+ 1
+        } else if gap < -256 {
             expectedSequence = sequence &+ 1
         }
     }

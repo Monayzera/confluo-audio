@@ -1,5 +1,6 @@
 import AppKit
 import Carbon.HIToolbox
+import ConfluoDSP
 import CoreAudio
 import Foundation
 import Observation
@@ -18,9 +19,10 @@ final class SourceItem: Identifiable {
     let slot: UInt32
     let sessionID: UUID?
     let identifier: String
-    let dacpID: String?
-    let activeRemote: String?
+    var dacpID: String?
+    var activeRemote: String?
     var name: String
+    var bufferedSeconds: Double?
     var volume: Double
     var muted: Bool
     var solo = false
@@ -101,6 +103,7 @@ final class AppModel: RAOPSessionDelegate {
     @ObservationIgnored private var meterTimer: Timer?
     @ObservationIgnored private var meterClients = 0
     @ObservationIgnored private var remoteVolumeWork: [UUID: DispatchWorkItem] = [:]
+    @ObservationIgnored private var remoteVolumeSentAt: [UUID: Date] = [:]
     @ObservationIgnored private var started = false
     @ObservationIgnored private var outputRunning = false
     @ObservationIgnored private var lastErrorSource: ErrorSource = .general
@@ -169,6 +172,8 @@ final class AppModel: RAOPSessionDelegate {
             self.clearError(from: .output)
             if !wasRunning && self.settings.captureMacAudio {
                 self.startCapture()
+            } else {
+                self.capture?.verifyExclusion()
             }
         }
         mixer.onError = { [weak self] error in
@@ -190,6 +195,7 @@ final class AppModel: RAOPSessionDelegate {
         let slots = SlotAllocator(slots: (1...UInt32(AudioMixer.airPlaySourceCount)).map { $0 })
         let server = RAOPServer(mixer: mixer.core, slots: slots, hardwareAddress: settings.hardwareAddressData)
         server.sessionDelegate = self
+        server.setLatencyMode(settings.latencyMode)
         server.onStateChange = { [weak self] state in
             guard let self else { return }
             self.receiverState = state
@@ -260,6 +266,13 @@ final class AppModel: RAOPSessionDelegate {
             if level != source.level {
                 source.level = level
             }
+            if source.kind == .airPlay {
+                let buffered = cf_source_buffered_seconds(mixer.core, source.slot)
+                let delay: Double? = buffered >= 0 ? ((buffered + cf_mixer_output_latency(mixer.core)) * 20).rounded() / 20 : nil
+                if delay != source.bufferedSeconds {
+                    source.bufferedSeconds = delay
+                }
+            }
         }
         let master = Self.smoothed(previous: masterLevel, peak: Double(mixer.takeMasterPeak()))
         if master != masterLevel {
@@ -311,10 +324,13 @@ final class AppModel: RAOPSessionDelegate {
         source.muted = muted
         if source.kind == .mac {
             settings.macMuted = muted
-        } else if let index = settings.knownDevices.firstIndex(where: { $0.id == source.identifier }) {
-            settings.knownDevices[index].muted = muted
         }
         applyGains()
+    }
+
+    func setLatencyMode(_ mode: LatencyMode) {
+        settings.latencyMode = mode
+        server?.setLatencyMode(mode)
     }
 
     func toggleSolo(_ source: SourceItem) {
@@ -524,6 +540,7 @@ final class AppModel: RAOPSessionDelegate {
             let decibels = volume <= 0 ? -144 : volume * 30 - 30
             self?.dacp.send(.volume(decibels: decibels), dacpID: dacpID, activeRemote: activeRemote)
             self?.remoteVolumeWork[sessionID] = nil
+            self?.remoteVolumeSentAt[sessionID] = Date()
         }
         remoteVolumeWork[sessionID] = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25, execute: work)
@@ -535,14 +552,13 @@ final class AppModel: RAOPSessionDelegate {
 
     func sessionDidBegin(_ session: RAOPSession, sender: SenderInfo) {
         guard source(for: session) == nil else { return }
-        let known = settings.knownDevices.first { $0.id == sender.identifier }
-        let item = SourceItem(kind: .airPlay, slot: sender.slot, name: sender.name, volume: 1.0, muted: known?.muted ?? false, sender: sender)
+        let item = SourceItem(kind: .airPlay, slot: sender.slot, name: sender.name, volume: 1.0, muted: false, sender: sender)
         sources.append(item)
         if let index = settings.knownDevices.firstIndex(where: { $0.id == sender.identifier }) {
             settings.knownDevices[index].name = sender.name
             settings.knownDevices[index].lastSeen = Date()
         } else {
-            settings.knownDevices.append(KnownDevice(id: sender.identifier, name: sender.name, muted: false, lastSeen: Date()))
+            settings.knownDevices.append(KnownDevice(id: sender.identifier, name: sender.name, lastSeen: Date()))
         }
         applyGains()
         if settings.notifyOnConnect {
@@ -554,6 +570,9 @@ final class AppModel: RAOPSessionDelegate {
         guard let item = source(for: session) else { return }
         let volume = decibels <= -144 ? 0 : min(max((decibels + 30) / 30, 0), 1)
         guard abs(volume - item.volume) > 0.004, remoteVolumeWork[session.id] == nil else { return }
+        if let sent = remoteVolumeSentAt[session.id], Date().timeIntervalSince(sent) < 1.5 {
+            return
+        }
         item.volume = volume
         applyGains()
     }
@@ -562,8 +581,23 @@ final class AppModel: RAOPSessionDelegate {
         source(for: session)?.metadata = metadata
     }
 
+    func session(_ session: RAOPSession, didUpdateRemote dacpID: String?, activeRemote: String?) {
+        guard let item = source(for: session) else { return }
+        item.dacpID = dacpID
+        item.activeRemote = activeRemote
+    }
+
     func session(_ session: RAOPSession, didChangeArtwork artwork: Data?) {
-        source(for: session)?.artwork = artwork.flatMap { NSImage(data: $0) }
+        guard let artwork else {
+            source(for: session)?.artwork = nil
+            return
+        }
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            let image = NSImage(data: artwork)
+            DispatchQueue.main.async {
+                self?.source(for: session)?.artwork = image
+            }
+        }
     }
 
     func sessionDidEnd(_ session: RAOPSession) {
@@ -571,6 +605,10 @@ final class AppModel: RAOPSessionDelegate {
         sources.removeAll { $0.id == item.id }
         remoteVolumeWork[session.id]?.cancel()
         remoteVolumeWork[session.id] = nil
+        remoteVolumeSentAt[session.id] = nil
+        if let index = settings.knownDevices.firstIndex(where: { $0.id == item.identifier }) {
+            settings.knownDevices[index].lastSeen = Date()
+        }
         applyGains()
         if settings.notifyOnDisconnect {
             Notifier.post(title: L10n.format("notification.disconnected", item.name), body: L10n.string("notification.disconnected.body"))

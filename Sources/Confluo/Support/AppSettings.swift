@@ -51,10 +51,29 @@ struct Hotkey: Codable, Equatable {
     }
 }
 
+enum LatencyMode: String, Codable, CaseIterable, Identifiable {
+    case low
+    case balanced
+    case synced
+
+    var id: String { rawValue }
+
+    var titleKey: String {
+        "latency.\(rawValue)"
+    }
+
+    var margin: Double? {
+        switch self {
+        case .low: return 0.15
+        case .balanced: return 0.5
+        case .synced: return nil
+        }
+    }
+}
+
 struct KnownDevice: Codable, Equatable, Identifiable {
     var id: String
     var name: String
-    var muted: Bool
     var lastSeen: Date
 }
 
@@ -64,6 +83,7 @@ struct AppSettings: Codable, Equatable {
     var macVolume: Double = 1.0
     var macMuted = false
     var captureMacAudio = true
+    var latencyMode: LatencyMode = .low
     var launchAtLogin = true
     var notifyOnConnect = true
     var notifyOnDisconnect = true
@@ -109,6 +129,7 @@ struct AppSettings: Codable, Equatable {
         macVolume = try container.decodeIfPresent(Double.self, forKey: .macVolume) ?? defaults.macVolume
         macMuted = try container.decodeIfPresent(Bool.self, forKey: .macMuted) ?? defaults.macMuted
         captureMacAudio = try container.decodeIfPresent(Bool.self, forKey: .captureMacAudio) ?? defaults.captureMacAudio
+        latencyMode = (try? container.decodeIfPresent(LatencyMode.self, forKey: .latencyMode)) ?? defaults.latencyMode
         launchAtLogin = try container.decodeIfPresent(Bool.self, forKey: .launchAtLogin) ?? defaults.launchAtLogin
         notifyOnConnect = try container.decodeIfPresent(Bool.self, forKey: .notifyOnConnect) ?? defaults.notifyOnConnect
         notifyOnDisconnect = try container.decodeIfPresent(Bool.self, forKey: .notifyOnDisconnect) ?? defaults.notifyOnDisconnect

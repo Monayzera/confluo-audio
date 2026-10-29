@@ -60,6 +60,13 @@ final class ProtocolTests: XCTestCase {
         XCTAssertEqual(parsed.codec, .pcm16BigEndian(sampleRate: 44_100, channels: 2))
     }
 
+    func testHotkeyValidation() {
+        XCTAssertNil(Hotkey.validated(keyCode: 8, flags: [.command]))
+        XCTAssertNotNil(Hotkey.validated(keyCode: 46, flags: [.control, .option]))
+        XCTAssertNotNil(Hotkey.validated(keyCode: 122, flags: []))
+        XCTAssertNil(Hotkey.validated(keyCode: 55, flags: [.command, .shift]))
+    }
+
     func testTransportPortParsing() {
         let transport = "RTP/AVP/UDP;unicast;interleaved=0-1;mode=record;control_port=6001;timing_port=6002"
         XCTAssertEqual(RAOPSession.port(named: "control_port", in: transport), 6001)
@@ -145,7 +152,7 @@ final class ProtocolTests: XCTestCase {
         var settings = AppSettings()
         settings.masterVolume = 0.42
         settings.hotkeys[.openMixer] = nil
-        settings.knownDevices = [KnownDevice(id: "a", name: "iPhone", muted: true, lastSeen: Date(timeIntervalSince1970: 100))]
+        settings.knownDevices = [KnownDevice(id: "a", name: "iPhone", lastSeen: Date(timeIntervalSince1970: 100))]
         let data = try JSONEncoder().encode(settings)
         let decoded = try JSONDecoder().decode(AppSettings.self, from: data)
         XCTAssertEqual(decoded, settings)
@@ -154,5 +161,9 @@ final class ProtocolTests: XCTestCase {
         XCTAssertEqual(partial.masterVolume, 0.3)
         XCTAssertEqual(partial.hotkeys, AppSettings.defaultHotkeys)
         XCTAssertTrue(partial.captureMacAudio)
+        XCTAssertEqual(partial.latencyMode, .low)
+        let legacy = try JSONDecoder().decode(AppSettings.self, from: Data("{\"knownDevices\":[{\"id\":\"x\",\"name\":\"Old\",\"muted\":true,\"lastSeen\":0}],\"latencyMode\":\"bogus\"}".utf8))
+        XCTAssertEqual(legacy.knownDevices.first?.name, "Old")
+        XCTAssertEqual(legacy.latencyMode, .low)
     }
 }

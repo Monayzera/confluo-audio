@@ -34,6 +34,10 @@ final class AudioMixer {
     private let queue = DispatchQueue(label: "confluo.audio.output")
     private var unit: AudioUnit?
     private var listener: AudioObjectPropertyListenerBlock?
+    private var deviceListener: AudioObjectPropertyListenerBlock?
+    private var listenedDevice = AudioDeviceID(kAudioObjectUnknown)
+    private var retryItem: DispatchWorkItem?
+    private static let deviceSelectors: [AudioObjectPropertySelector] = [kAudioDevicePropertyLatency, kAudioDevicePropertyBufferFrameSize, kAudioDevicePropertySafetyOffset]
     private(set) var device = AudioDeviceID(kAudioObjectUnknown)
 
     init?() {
@@ -49,15 +53,18 @@ final class AudioMixer {
     }
 
     func start() throws {
+        installListener()
         try queue.sync {
+            guard unit == nil else { return }
             try startUnit()
         }
-        installListener()
     }
 
     func stop() {
         removeListener()
         queue.sync {
+            retryItem?.cancel()
+            retryItem = nil
             stopUnit()
         }
     }
@@ -119,6 +126,7 @@ final class AudioMixer {
             try check(AudioOutputUnitStart(created), "AudioOutputUnitStart")
             unit = created
             device = current
+            listenToDevice(current)
         } catch {
             AudioUnitUninitialize(created)
             AudioComponentInstanceDispose(created)
@@ -127,11 +135,47 @@ final class AudioMixer {
     }
 
     private func stopUnit() {
+        stopListeningToDevice()
         guard let unit else { return }
         AudioOutputUnitStop(unit)
         AudioUnitUninitialize(unit)
         AudioComponentInstanceDispose(unit)
         self.unit = nil
+        device = AudioDeviceID(kAudioObjectUnknown)
+    }
+
+    private func listenToDevice(_ target: AudioDeviceID) {
+        stopListeningToDevice()
+        let block: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
+            self?.refreshOutputLatency()
+        }
+        for selector in Self.deviceSelectors {
+            var address = CoreAudioQuery.address(selector, kAudioObjectPropertyScopeOutput)
+            AudioObjectAddPropertyListenerBlock(target, &address, queue, block)
+        }
+        deviceListener = block
+        listenedDevice = target
+    }
+
+    private func stopListeningToDevice() {
+        guard let deviceListener, listenedDevice != AudioDeviceID(kAudioObjectUnknown) else {
+            self.deviceListener = nil
+            return
+        }
+        for selector in Self.deviceSelectors {
+            var address = CoreAudioQuery.address(selector, kAudioObjectPropertyScopeOutput)
+            AudioObjectRemovePropertyListenerBlock(listenedDevice, &address, queue, deviceListener)
+        }
+        self.deviceListener = nil
+        listenedDevice = AudioDeviceID(kAudioObjectUnknown)
+    }
+
+    private func refreshOutputLatency() {
+        guard let unit, device != AudioDeviceID(kAudioObjectUnknown) else { return }
+        var format = AudioStreamBasicDescription()
+        var size = UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
+        guard AudioUnitGetProperty(unit, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Input, 0, &format, &size) == noErr, format.mSampleRate > 0 else { return }
+        cf_mixer_set_output(core, format.mSampleRate, CoreAudioQuery.outputLatency(device))
     }
 
     private func installListener() {
@@ -154,15 +198,21 @@ final class AudioMixer {
 
     private func handleDefaultDeviceChange() {
         let next = CoreAudioQuery.defaultOutputDevice()
-        guard next != device, next != AudioDeviceID(kAudioObjectUnknown) else { return }
+        guard next != AudioDeviceID(kAudioObjectUnknown), next != device || unit == nil else { return }
+        retryItem?.cancel()
+        retryItem = nil
         stopUnit()
         do {
             try startUnit()
         } catch {
-            device = AudioDeviceID(kAudioObjectUnknown)
             DispatchQueue.main.async { [weak self] in
                 self?.onError?(error)
             }
+            let item = DispatchWorkItem { [weak self] in
+                self?.handleDefaultDeviceChange()
+            }
+            retryItem = item
+            queue.asyncAfter(deadline: .now() + 2, execute: item)
             return
         }
         let current = device

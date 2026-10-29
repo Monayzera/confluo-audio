@@ -66,6 +66,7 @@ struct LevelMeter: View {
 
 struct VolumeSlider: View {
     let value: Double
+    var label: String = ""
     let onChange: (Double) -> Void
 
     var body: some View {
@@ -75,6 +76,8 @@ struct VolumeSlider: View {
                 .foregroundStyle(.tertiary)
             Slider(value: Binding(get: { value }, set: { onChange($0) }), in: 0...1)
                 .controlSize(.small)
+                .accessibilityLabel(label)
+                .accessibilityValue("\(Int((value * 100).rounded()))%")
             Text("\(Int((value * 100).rounded()))%")
                 .font(.system(size: 11, weight: .medium).monospacedDigit())
                 .foregroundStyle(.secondary)

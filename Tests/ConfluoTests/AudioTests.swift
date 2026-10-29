@@ -9,6 +9,16 @@ final class AudioTests: XCTestCase {
         try XCTUnwrap(cf_mixer_create(2, capacity, 1_000_000_000))
     }
 
+    private func feed(_ mixer: OpaquePointer, _ source: UInt32, value: Float, frames: Int, chunk: Int = 256) {
+        let block = [Float](repeating: value, count: chunk * 2)
+        var remaining = frames
+        while remaining > 0 {
+            let count = min(chunk, remaining)
+            cf_source_append(mixer, source, block, UInt32(count))
+            remaining -= count
+        }
+    }
+
     func testTimedSourceFollowsAnchor() throws {
         let mixer = try makeMixer()
         defer { cf_mixer_destroy(mixer) }
@@ -81,13 +91,12 @@ final class AudioTests: XCTestCase {
         cf_mixer_set_output(mixer, 48_000, 0)
         cf_source_begin(mixer, 1, CF_MODE_FIFO, 48_000)
         cf_source_set_fifo_target(mixer, 1, 0.01)
-        let block = [Float](repeating: 0.5, count: 2_000)
         var left = [Float](repeating: 0, count: 256)
         var right = [Float](repeating: 0, count: 256)
-        cf_source_append(mixer, 1, block, 300)
+        feed(mixer, 1, value: 0.5, frames: 300)
         cf_mixer_render(mixer, &left, &right, 256, 0)
         XCTAssertTrue(left.allSatisfy { $0 == 0 })
-        cf_source_append(mixer, 1, block, 1_000)
+        feed(mixer, 1, value: 0.5, frames: 1_024)
         cf_mixer_render(mixer, &left, &right, 256, 0)
         cf_mixer_render(mixer, &left, &right, 256, 0)
         XCTAssertEqual(left[200], 0.5, accuracy: 0.001)
@@ -95,10 +104,32 @@ final class AudioTests: XCTestCase {
             cf_mixer_render(mixer, &left, &right, 256, 0)
         }
         XCTAssertTrue(left.allSatisfy { $0 == 0 })
-        cf_source_append(mixer, 1, block, 1_000)
+        feed(mixer, 1, value: 0.5, frames: 1_024)
         cf_mixer_render(mixer, &left, &right, 256, 0)
         cf_mixer_render(mixer, &left, &right, 256, 0)
         XCTAssertEqual(left[100], 0.5, accuracy: 0.001)
+    }
+
+    func testFifoHandlesLargeOutputBuffersWithoutStutter() throws {
+        let mixer = try makeMixer(capacity: 1 << 17)
+        defer { cf_mixer_destroy(mixer) }
+        cf_mixer_set_output(mixer, 48_000, 0)
+        cf_source_begin(mixer, 0, CF_MODE_FIFO, 48_000)
+        cf_source_set_fifo_target(mixer, 0, 0.03)
+        let chunk = [Float](repeating: 0.5, count: 1_024 * 2)
+        var left = [Float](repeating: 0, count: 2_048)
+        var right = [Float](repeating: 0, count: 2_048)
+        var silentBlocks = 0
+        for block in 0..<200 {
+            cf_source_append(mixer, 0, chunk, 1_024)
+            cf_source_append(mixer, 0, chunk, 1_024)
+            cf_mixer_render(mixer, &left, &right, 2_048, 0)
+            if block > 10 && left[1_024] == 0 {
+                silentBlocks += 1
+            }
+        }
+        XCTAssertEqual(silentBlocks, 0)
+        XCTAssertGreaterThan(cf_source_buffered_seconds(mixer, 0), 0)
     }
 
     func testGainsMasterAndLimiter() throws {
@@ -109,9 +140,8 @@ final class AudioTests: XCTestCase {
         cf_source_begin(mixer, 1, CF_MODE_FIFO, 48_000)
         cf_source_set_fifo_target(mixer, 0, 0.005)
         cf_source_set_fifo_target(mixer, 1, 0.005)
-        let loud = [Float](repeating: 0.9, count: 8_000)
-        cf_source_append(mixer, 0, loud, 4_000)
-        cf_source_append(mixer, 1, loud, 4_000)
+        feed(mixer, 0, value: 0.9, frames: 4_000)
+        feed(mixer, 1, value: 0.9, frames: 4_000)
         var left = [Float](repeating: 0, count: 128)
         var right = [Float](repeating: 0, count: 128)
         cf_mixer_render(mixer, &left, &right, 128, 0)

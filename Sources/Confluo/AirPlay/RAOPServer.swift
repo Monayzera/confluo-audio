@@ -20,6 +20,7 @@ final class RAOPServer {
     private var sessions: [UUID: RAOPSession] = [:]
     private var serviceName = "Confluo"
     private var retryWorkItem: DispatchWorkItem?
+    private var latencyMode: LatencyMode = .low
 
     init(mixer: OpaquePointer, slots: SlotAllocator, hardwareAddress: Data) {
         self.mixer = mixer
@@ -60,7 +61,13 @@ final class RAOPServer {
         listener = nil
         onStateChange?(.starting)
         do {
-            let parameters = NWParameters.tcp
+            let tcp = NWProtocolTCP.Options()
+            tcp.enableKeepalive = true
+            tcp.keepaliveIdle = 10
+            tcp.keepaliveInterval = 5
+            tcp.keepaliveCount = 3
+            tcp.noDelay = true
+            let parameters = NWParameters(tls: nil, tcp: tcp)
             parameters.allowLocalEndpointReuse = true
             let created = try NWListener(using: parameters)
             created.service = NWListener.Service(name: bonjourName, type: "_raop._tcp", domain: nil, txtRecord: Self.txtRecord())
@@ -96,6 +103,11 @@ final class RAOPServer {
         listener = nil
         sessions.values.forEach { $0.disconnect() }
         onStateChange?(.stopped)
+    }
+
+    func setLatencyMode(_ mode: LatencyMode) {
+        latencyMode = mode
+        sessions.values.forEach { $0.setLatencyMode(mode) }
     }
 
     func disconnect(sessionID: UUID) {
@@ -135,7 +147,11 @@ final class RAOPServer {
     }
 
     private func accept(_ connection: NWConnection) {
-        let session = RAOPSession(connection: connection, mixer: mixer, slots: slots, hardwareAddress: hardwareAddress) { [weak self] closed in
+        guard sessions.count < 12 else {
+            connection.cancel()
+            return
+        }
+        let session = RAOPSession(connection: connection, mixer: mixer, slots: slots, hardwareAddress: hardwareAddress, latencyMode: latencyMode) { [weak self] closed in
             self?.sessions[closed.id] = nil
         }
         session.delegate = sessionDelegate

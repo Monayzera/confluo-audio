@@ -17,6 +17,8 @@ final class SystemAudioCapture {
     var onError: ((Error) -> Void)?
     private(set) var isRunning = false
     private var sourceBegun = false
+    private var excludedProcess = AudioObjectID(kAudioObjectUnknown)
+    private var retryCount = 0
 
     init(mixer: OpaquePointer, source: UInt32) {
         self.mixer = mixer
@@ -50,6 +52,7 @@ final class SystemAudioCapture {
 
     func stop(completion: (() -> Void)? = nil) {
         queue.async { [weak self] in
+            self?.retryCount = 0
             self?.stopLocked()
             if let completion {
                 DispatchQueue.main.async(execute: completion)
@@ -57,9 +60,23 @@ final class SystemAudioCapture {
         }
     }
 
-    func stopSynchronously() {
-        queue.sync {
-            stopLocked()
+    func stopSynchronously(timeout: TimeInterval = 1.5) {
+        let done = DispatchSemaphore(value: 0)
+        queue.async { [weak self] in
+            self?.retryCount = 0
+            self?.stopLocked()
+            done.signal()
+        }
+        _ = done.wait(timeout: .now() + timeout)
+    }
+
+    func verifyExclusion() {
+        queue.async { [weak self] in
+            guard let self, self.isRunning else { return }
+            let current = CoreAudioQuery.processObject(for: getpid())
+            if current != AudioObjectID(kAudioObjectUnknown), current != self.excludedProcess {
+                self.restartAfterFormatChange()
+            }
         }
     }
 
@@ -68,6 +85,7 @@ final class SystemAudioCapture {
         guard ownProcess != AudioObjectID(kAudioObjectUnknown) else {
             throw CoreAudioError(operation: "TranslatePIDToProcessObject", status: -1)
         }
+        excludedProcess = ownProcess
         let description = CATapDescription(stereoGlobalTapButExcludeProcesses: [ownProcess])
         description.uuid = UUID()
         description.name = "Confluo"
@@ -93,10 +111,13 @@ final class SystemAudioCapture {
         try check(AudioHardwareCreateAggregateDevice(aggregate as CFDictionary, &device), "AudioHardwareCreateAggregateDevice")
         aggregateID = device
 
-        var rate = CoreAudioQuery.nominalSampleRate(device)
+        let tapFormat: AudioStreamBasicDescription = CoreAudioQuery.value(tap, kAudioTapPropertyFormat, default: AudioStreamBasicDescription())
+        var rate = tapFormat.mSampleRate
         if rate <= 0 {
-            let format: AudioStreamBasicDescription = CoreAudioQuery.value(tap, kAudioTapPropertyFormat, default: AudioStreamBasicDescription())
-            rate = format.mSampleRate > 0 ? format.mSampleRate : 48_000
+            rate = CoreAudioQuery.nominalSampleRate(device)
+        }
+        if rate <= 0 {
+            rate = 48_000
         }
 
         let mixer = self.mixer
@@ -161,14 +182,23 @@ final class SystemAudioCapture {
     }
 
     private func restartAfterFormatChange() {
-        guard isRunning else { return }
+        guard isRunning || retryCount > 0 else { return }
         stopLocked()
         do {
             try startLocked()
+            retryCount = 0
         } catch {
             stopLocked()
-            DispatchQueue.main.async { [weak self] in
-                self?.onError?(error)
+            if retryCount < 5 {
+                retryCount += 1
+                queue.asyncAfter(deadline: .now() + 1) { [weak self] in
+                    self?.restartAfterFormatChange()
+                }
+            } else {
+                retryCount = 0
+                DispatchQueue.main.async { [weak self] in
+                    self?.onError?(error)
+                }
             }
         }
     }
@@ -180,14 +210,14 @@ final class SystemAudioCapture {
         guard firstChannels > 0 else { return }
         let frames = Int(first.mDataByteSize) / (firstChannels * MemoryLayout<Float>.size)
         guard frames > 0 else { return }
-        if buffers.count == 1 && firstChannels == 2 {
+        if firstChannels == 2 {
             cf_source_append(mixer, source, firstData.assumingMemoryBound(to: Float.self), UInt32(frames))
             return
         }
         var offset = 0
         while offset < frames {
             let chunk = min(frames - offset, scratchFrames)
-            if buffers.count == 1 {
+            if buffers.count == 1 || firstChannels > 1 {
                 let samples = firstData.assumingMemoryBound(to: Float.self)
                 for frame in 0..<chunk {
                     let base = (offset + frame) * firstChannels
@@ -198,7 +228,8 @@ final class SystemAudioCapture {
                 }
             } else {
                 let leftSamples = firstData.assumingMemoryBound(to: Float.self)
-                let rightSamples = buffers[1].mData?.assumingMemoryBound(to: Float.self) ?? leftSamples
+                let secondFrames = Int(buffers[1].mDataByteSize) / MemoryLayout<Float>.size
+                let rightSamples = (secondFrames >= frames ? buffers[1].mData?.assumingMemoryBound(to: Float.self) : nil) ?? leftSamples
                 for frame in 0..<chunk {
                     scratch[frame * 2] = leftSamples[offset + frame]
                     scratch[frame * 2 + 1] = rightSamples[offset + frame]

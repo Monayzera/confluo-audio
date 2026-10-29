@@ -34,6 +34,7 @@ final class UDPSocket {
     private let source: DispatchSourceRead
     private var buffer = [UInt8](repeating: 0, count: 65_536)
     private var closed = false
+    var allowedSource: in6_addr?
 
     init(queue: DispatchQueue, handler: @escaping (UnsafeRawBufferPointer) -> Void) throws {
         let fd = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP)
@@ -99,12 +100,29 @@ final class UDPSocket {
 
     private func drain(_ handler: (UnsafeRawBufferPointer) -> Void) {
         guard !closed else { return }
-        while true {
-            let received = buffer.withUnsafeMutableBytes { recv(descriptor, $0.baseAddress, $0.count, 0) }
-            if received <= 0 {
+        for _ in 0..<64 {
+            var sender = sockaddr_in6()
+            var length = socklen_t(MemoryLayout<sockaddr_in6>.size)
+            let received = buffer.withUnsafeMutableBytes { bytes in
+                withUnsafeMutablePointer(to: &sender) {
+                    $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                        recvfrom(descriptor, bytes.baseAddress, bytes.count, 0, $0, &length)
+                    }
+                }
+            }
+            if received <= 0 || closed {
                 return
+            }
+            if let allowedSource, !Self.same(allowedSource, sender.sin6_addr) {
+                continue
             }
             buffer.withUnsafeBytes { handler(UnsafeRawBufferPointer(rebasing: $0.prefix(received))) }
         }
+    }
+
+    private static func same(_ lhs: in6_addr, _ rhs: in6_addr) -> Bool {
+        var left = lhs
+        var right = rhs
+        return memcmp(&left, &right, MemoryLayout<in6_addr>.size) == 0
     }
 }

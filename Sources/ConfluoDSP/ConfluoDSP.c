@@ -18,6 +18,10 @@ typedef struct {
     _Atomic uint32_t gain_bits;
     _Atomic uint64_t fifo_target_bits;
     _Atomic uint32_t peak_bits;
+    _Atomic uint32_t max_chunk;
+    _Atomic uint64_t read_pos_bits;
+    _Atomic uint32_t compensate_latency;
+    _Atomic uint32_t reading;
     float *ring;
     uint64_t seen_epoch;
     double pos;
@@ -164,6 +168,13 @@ void cf_mixer_set_output(cf_mixer *mixer, double sample_rate, double latency_sec
     atomic_store_explicit(&mixer->output_latency_bits, double_bits(fmax(0.0, latency_seconds)), memory_order_relaxed);
 }
 
+double cf_mixer_output_latency(const cf_mixer *mixer) {
+    if (mixer == NULL) {
+        return 0.0;
+    }
+    return bits_double(atomic_load_explicit(&((cf_mixer *)mixer)->output_latency_bits, memory_order_relaxed));
+}
+
 float cf_mixer_take_master_peak(cf_mixer *mixer) {
     if (mixer == NULL) {
         return 0.0f;
@@ -195,8 +206,10 @@ void cf_source_begin(cf_mixer *mixer, uint32_t index, cf_mode mode, double sampl
     atomic_store_explicit(&source->rate_bits, double_bits(sample_rate), memory_order_relaxed);
     atomic_store_explicit(&source->write_index, 0, memory_order_relaxed);
     atomic_store_explicit(&source->peak_bits, 0, memory_order_relaxed);
+    atomic_store_explicit(&source->max_chunk, 0, memory_order_relaxed);
+    atomic_store_explicit(&source->compensate_latency, 1, memory_order_relaxed);
     invalidate_anchor(source);
-    atomic_store_explicit(&source->active, 1, memory_order_relaxed);
+    atomic_store_explicit(&source->active, 1, memory_order_release);
     atomic_fetch_add_explicit(&source->epoch, 1, memory_order_release);
 }
 
@@ -302,6 +315,9 @@ void cf_source_append(cf_mixer *mixer, uint32_t index, const float *interleaved_
         return;
     }
     int64_t written = atomic_load_explicit(&source->write_index, memory_order_relaxed);
+    if (frames > atomic_load_explicit(&source->max_chunk, memory_order_relaxed)) {
+        atomic_store_explicit(&source->max_chunk, frames, memory_order_relaxed);
+    }
     while (frames > 0) {
         uint32_t chunk = frames > mixer->capacity / 2 ? mixer->capacity / 2 : frames;
         cf_source_write(mixer, index, written, interleaved_stereo, chunk);
@@ -333,6 +349,14 @@ void cf_source_set_fifo_target(cf_mixer *mixer, uint32_t index, double seconds) 
     atomic_store_explicit(&source->fifo_target_bits, double_bits(seconds), memory_order_relaxed);
 }
 
+void cf_source_set_latency_compensation(cf_mixer *mixer, uint32_t index, bool enabled) {
+    cf_source *source = source_at(mixer, index);
+    if (source == NULL) {
+        return;
+    }
+    atomic_store_explicit(&source->compensate_latency, enabled ? 1u : 0u, memory_order_relaxed);
+}
+
 void cf_source_set_gain(cf_mixer *mixer, uint32_t index, float gain) {
     cf_source *source = source_at(mixer, index);
     if (source == NULL || !isfinite(gain)) {
@@ -347,6 +371,21 @@ float cf_source_take_peak(cf_mixer *mixer, uint32_t index) {
         return 0.0f;
     }
     return bits_float(atomic_exchange_explicit(&source->peak_bits, 0, memory_order_relaxed));
+}
+
+double cf_source_buffered_seconds(const cf_mixer *mixer, uint32_t index) {
+    cf_source *source = source_at(mixer, index);
+    if (source == NULL || atomic_load_explicit(&source->active, memory_order_relaxed) == 0 || atomic_load_explicit(&source->reading, memory_order_relaxed) == 0) {
+        return -1.0;
+    }
+    double rate = bits_double(atomic_load_explicit(&source->rate_bits, memory_order_relaxed));
+    if (!(rate > 0.0)) {
+        return -1.0;
+    }
+    double position = bits_double(atomic_load_explicit(&source->read_pos_bits, memory_order_relaxed));
+    double written = (double)atomic_load_explicit(&source->write_index, memory_order_acquire);
+    double buffered = (written - position) / rate;
+    return buffered < 0.0 ? 0.0 : buffered;
 }
 
 static void refresh_anchor(cf_source *source) {
@@ -372,9 +411,10 @@ static void refresh_anchor(cf_source *source) {
 }
 
 static void render_source(cf_mixer *mixer, cf_source *source, float *left, float *right, uint32_t frames, double output_rate, uint64_t host_time, double latency) {
-    if (atomic_load_explicit(&source->active, memory_order_relaxed) == 0) {
+    if (atomic_load_explicit(&source->active, memory_order_acquire) == 0) {
         source->playing = false;
         source->gain_current = 0.0f;
+        atomic_store_explicit(&source->reading, 0, memory_order_relaxed);
         return;
     }
     uint64_t epoch = atomic_load_explicit(&source->epoch, memory_order_acquire);
@@ -385,6 +425,10 @@ static void render_source(cf_mixer *mixer, cf_source *source, float *left, float
         source->pos = 0.0;
         source->gain_current = 0.0f;
     }
+    if (!isfinite(source->pos)) {
+        source->pos = 0.0;
+        source->playing = false;
+    }
     double rate = bits_double(atomic_load_explicit(&source->rate_bits, memory_order_relaxed));
     if (!(rate > 0.0)) {
         return;
@@ -393,29 +437,40 @@ static void render_source(cf_mixer *mixer, cf_source *source, float *left, float
     uint32_t mode = atomic_load_explicit(&source->mode, memory_order_relaxed);
     double base = rate / output_rate;
     double step = base;
+    bool fade_out = false;
+    double resync_position = 0.0;
 
     if (mode == CF_MODE_TIMED) {
         refresh_anchor(source);
         if (!source->anchored) {
             source->playing = false;
             source->gain_current = 0.0f;
+            atomic_store_explicit(&source->reading, 0, memory_order_relaxed);
             return;
         }
-        double elapsed = (double)(int64_t)(host_time - source->cached_host) / mixer->ticks_per_second + latency;
+        double compensation = atomic_load_explicit(&source->compensate_latency, memory_order_relaxed) ? latency : 0.0;
+        double elapsed = (double)(int64_t)(host_time - source->cached_host) / mixer->ticks_per_second + compensation;
         double desired = source->cached_frame + elapsed * rate;
-        if (!source->playing || fabs(source->pos - desired) > 0.1 * rate) {
+        if (!source->playing) {
             source->pos = desired;
             source->playing = true;
             source->gain_current = 0.0f;
+        } else if (fabs(source->pos - desired) > 0.1 * rate) {
+            fade_out = true;
+            resync_position = desired + (double)frames * base;
         } else {
             double error = (source->pos - desired) / rate;
-            step = base * (1.0 - clampd(error * 0.1, -0.002, 0.002));
+            step = base * (1.0 - clampd(error * 0.1, -0.002, 0.005));
         }
     } else {
-        double target = bits_double(atomic_load_explicit(&source->fifo_target_bits, memory_order_relaxed)) * rate;
+        double configured = bits_double(atomic_load_explicit(&source->fifo_target_bits, memory_order_relaxed)) * rate;
+        double chunk = (double)atomic_load_explicit(&source->max_chunk, memory_order_relaxed);
+        double minimum = 1.25 * ((double)frames * base + chunk) + 64.0;
+        double target = configured > minimum ? configured : minimum;
         double fill = (double)written - source->pos;
         if (!source->playing) {
             if (fill < target + 4.0) {
+                atomic_store_explicit(&source->reading, 0, memory_order_relaxed);
                 return;
             }
             source->playing = true;
@@ -426,13 +481,14 @@ static void render_source(cf_mixer *mixer, cf_source *source, float *left, float
             source->pos = (double)written - target;
             fill = target;
             source->fifo_average = target;
+            source->gain_current = 0.0f;
         }
         source->fifo_average += (fill - source->fifo_average) * 0.05;
         double error = (source->fifo_average - target) / rate;
         step = base * (1.0 + clampd(error * 0.5, -0.005, 0.005));
     }
 
-    float target_gain = bits_float(atomic_load_explicit(&source->gain_bits, memory_order_relaxed));
+    float target_gain = fade_out ? 0.0f : bits_float(atomic_load_explicit(&source->gain_bits, memory_order_relaxed));
     float gain = source->gain_current;
     float gain_step = (target_gain - gain) / (float)frames;
     int64_t oldest = written - (int64_t)mixer->capacity + 4;
@@ -453,6 +509,10 @@ static void render_source(cf_mixer *mixer, cf_source *source, float *left, float
             const float *d = ring + (size_t)((uint64_t)(integer + 2) & mask) * 2;
             float l = hermite(a[0], b[0], c[0], d[0], t) * gain;
             float r = hermite(a[1], b[1], c[1], d[1], t) * gain;
+            if (!isfinite(l) || !isfinite(r)) {
+                l = 0.0f;
+                r = 0.0f;
+            }
             left[i] += l;
             right[i] += r;
             float magnitude = fmaxf(fabsf(l), fabsf(r));
@@ -465,8 +525,10 @@ static void render_source(cf_mixer *mixer, cf_source *source, float *left, float
         }
         pos += step;
     }
-    source->pos = pos;
-    source->gain_current = source->playing ? target_gain : 0.0f;
+    source->pos = fade_out ? resync_position : pos;
+    source->gain_current = (source->playing && !fade_out) ? target_gain : 0.0f;
+    atomic_store_explicit(&source->read_pos_bits, double_bits(source->pos), memory_order_relaxed);
+    atomic_store_explicit(&source->reading, source->playing ? 1u : 0u, memory_order_relaxed);
     store_peak_max(&source->peak_bits, peak);
 }
 

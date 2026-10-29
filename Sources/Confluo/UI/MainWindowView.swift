@@ -75,8 +75,6 @@ struct MixerPage: View {
             .frame(maxWidth: 640)
             .frame(maxWidth: .infinity)
         }
-        .onAppear { model.meterClientAppeared() }
-        .onDisappear { model.meterClientDisappeared() }
     }
 }
 
@@ -105,11 +103,6 @@ struct DevicesPage: View {
                                 Text(L10n.string("devices.connected"))
                                     .font(.system(size: 11, weight: .medium))
                                     .foregroundStyle(Color(red: 0.42, green: 0.78, blue: 0.68))
-                            }
-                            if device.muted {
-                                Image(systemName: "speaker.slash.fill")
-                                    .foregroundStyle(.secondary)
-                                    .help(L10n.string("devices.mutedHint"))
                             }
                             Button(L10n.string("devices.forget")) {
                                 model.forget(device)
@@ -168,20 +161,15 @@ struct ShortcutsPage: View {
 struct SettingsPage: View {
     let model: AppModel
     @State private var name = ""
+    @State private var pendingName: DispatchWorkItem?
 
     var body: some View {
         Form {
             Section {
                 TextField(L10n.string("settings.receiverName"), text: $name, prompt: Text(model.defaultReceiverName))
-                    .onSubmit { model.setReceiverName(name) }
-                HStack {
-                    ReceiverStatusLabel(model: model)
-                    Spacer()
-                    Button(L10n.string("settings.apply")) {
-                        model.setReceiverName(name)
-                    }
-                    .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines) == (model.settings.receiverName ?? ""))
-                }
+                    .onSubmit { commitName() }
+                    .onChange(of: name) { _, _ in scheduleName() }
+                ReceiverStatusLabel(model: model)
             } header: {
                 Text(L10n.string("settings.receiver"))
             } footer: {
@@ -191,16 +179,29 @@ struct SettingsPage: View {
 
             Section {
                 Toggle(L10n.string("settings.captureMac"), isOn: Binding(get: { model.settings.captureMacAudio }, set: { model.setCaptureMacAudio($0) }))
+                Picker(L10n.string("settings.latency"), selection: Binding(get: { model.settings.latencyMode }, set: { model.setLatencyMode($0) })) {
+                    ForEach(LatencyMode.allCases) { mode in
+                        Text(L10n.string(mode.titleKey)).tag(mode)
+                    }
+                }
             } header: {
                 Text(L10n.string("settings.audio"))
             } footer: {
-                Text(L10n.string("settings.captureMacFooter"))
-                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(L10n.string("settings.captureMacFooter"))
+                    Text(L10n.string("settings.latencyFooter"))
+                }
+                .foregroundStyle(.secondary)
             }
 
             Section {
                 Toggle(L10n.string("settings.launchAtLogin"), isOn: Binding(get: { model.settings.launchAtLogin }, set: { model.setLaunchAtLogin($0) }))
-                if model.settings.launchAtLogin && LoginItem.requiresApproval {
+                if let error = model.loginItemError {
+                    Text(error)
+                        .font(.system(size: 11))
+                        .foregroundStyle(Color(red: 0.93, green: 0.62, blue: 0.55))
+                }
+                if model.loginItemStatus == .requiresApproval {
                     HStack {
                         Text(L10n.string("settings.loginApproval"))
                             .font(.system(size: 11))
@@ -225,6 +226,25 @@ struct SettingsPage: View {
             }
         }
         .formStyle(.grouped)
-        .onAppear { name = model.settings.receiverName ?? "" }
+        .onAppear {
+            name = model.settings.receiverName ?? ""
+            model.refreshLoginItem()
+        }
+        .onDisappear { commitName() }
+    }
+
+    private func scheduleName() {
+        pendingName?.cancel()
+        let work = DispatchWorkItem { commitName() }
+        pendingName = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8, execute: work)
+    }
+
+    private func commitName() {
+        pendingName?.cancel()
+        pendingName = nil
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed != (model.settings.receiverName ?? "") else { return }
+        model.setReceiverName(name)
     }
 }

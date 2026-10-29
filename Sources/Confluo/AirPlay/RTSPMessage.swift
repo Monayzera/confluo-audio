@@ -42,9 +42,7 @@ struct RTSPResponse {
         for (name, value) in headers {
             text += "\(name): \(value)\r\n"
         }
-        if !body.isEmpty {
-            text += "Content-Length: \(body.count)\r\n"
-        }
+        text += "Content-Length: \(body.count)\r\n"
         text += "\r\n"
         var data = Data(text.utf8)
         data.append(body)

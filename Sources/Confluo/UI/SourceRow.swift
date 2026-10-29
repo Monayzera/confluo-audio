@@ -4,21 +4,37 @@ struct SourceRow: View {
     let model: AppModel
     @Bindable var source: SourceItem
 
+    private var captureUnavailable: Bool {
+        source.kind == .mac && !model.captureActive
+    }
+
     private var statusText: String {
-        if source.kind == .mac && !model.captureActive {
-            return L10n.string("source.status.captureOff")
+        if source.kind == .mac {
+            switch model.captureState {
+            case .off: return L10n.string("source.status.captureOff")
+            case .starting: return L10n.string("source.status.captureStarting")
+            case .failed: return L10n.string("source.status.captureFailed")
+            case .active: break
+            }
         }
         if source.muted {
             return L10n.string("source.status.muted")
         }
-        return source.isPlaying ? L10n.string("source.status.playing") : L10n.string("source.status.idle")
+        if model.anySolo && !source.solo {
+            return L10n.string("source.status.soloMuted")
+        }
+        let base = source.isPlaying ? L10n.string("source.status.playing") : L10n.string("source.status.idle")
+        if source.kind == .airPlay, let delay = source.bufferedSeconds {
+            return base + " · " + L10n.format("source.delay", delay)
+        }
+        return base
     }
 
     private var statusColor: Color {
-        if source.kind == .mac && !model.captureActive {
-            return .secondary.opacity(0.5)
+        if captureUnavailable {
+            return model.captureState == .failed ? Color(red: 0.93, green: 0.62, blue: 0.55) : .secondary.opacity(0.5)
         }
-        if source.muted {
+        if source.muted || (model.anySolo && !source.solo) {
             return Color(red: 0.93, green: 0.62, blue: 0.55)
         }
         return source.isPlaying ? Color(red: 0.42, green: 0.78, blue: 0.68) : .secondary.opacity(0.5)
@@ -38,26 +54,51 @@ struct SourceRow: View {
                     HStack(spacing: 5) {
                         StatusDot(color: statusColor)
                         Text(statusText)
-                            .font(.system(size: 11))
+                            .font(.system(size: 11).monospacedDigit())
                             .foregroundStyle(.secondary)
+                            .lineLimit(1)
                     }
                 }
                 Spacer(minLength: 8)
-                controls
+                if captureUnavailable {
+                    captureAction
+                } else {
+                    controls
+                }
             }
             if source.kind == .airPlay && (!source.metadata.isEmpty || source.artwork != nil) {
                 nowPlaying
             }
             VStack(spacing: 6) {
-                VolumeSlider(value: source.volume) { model.setVolume($0, for: source) }
+                VolumeSlider(value: source.volume, label: source.name) { model.setVolume($0, for: source) }
                 LevelMeter(level: source.level, muted: source.muted)
                     .padding(.leading, 18)
                     .padding(.trailing, 44)
             }
-            .disabled(source.kind == .mac && !model.captureActive)
-            .opacity(source.kind == .mac && !model.captureActive ? 0.45 : 1)
+            .disabled(captureUnavailable)
+            .opacity(captureUnavailable ? 0.45 : 1)
         }
         .surfaceCard()
+    }
+
+    @ViewBuilder
+    private var captureAction: some View {
+        switch model.captureState {
+        case .off:
+            Button(L10n.string("action.enableCapture")) {
+                model.setCaptureMacAudio(true)
+            }
+            .glassControl()
+            .controlSize(.small)
+        case .failed:
+            Button(L10n.string("action.openPermissions")) {
+                model.openCapturePrivacySettings()
+            }
+            .glassControl()
+            .controlSize(.small)
+        case .starting, .active:
+            EmptyView()
+        }
     }
 
     private var controls: some View {
@@ -80,8 +121,9 @@ struct SourceRow: View {
                     .frame(width: 16, height: 14)
             }
             .glassControl(active: source.solo, tint: Color(red: 0.47, green: 0.66, blue: 0.93))
-            .help(L10n.string("action.solo"))
+            .help(L10n.string("action.soloHelp"))
             .accessibilityLabel(L10n.string("action.solo"))
+            .accessibilityAddTraits(source.solo ? .isSelected : [])
 
             if source.kind == .airPlay {
                 Button {
@@ -163,6 +205,7 @@ struct MasterRow: View {
             HStack {
                 Label(L10n.string("master.title"), systemImage: "slider.horizontal.3")
                     .font(.system(size: 12, weight: .semibold))
+                    .layoutPriority(1)
                 Spacer()
                 if !model.outputDeviceName.isEmpty {
                     Label(model.outputDeviceName, systemImage: "speaker.wave.2")
@@ -171,7 +214,7 @@ struct MasterRow: View {
                         .lineLimit(1)
                 }
             }
-            VolumeSlider(value: model.settings.masterVolume) { model.setMasterVolume($0) }
+            VolumeSlider(value: model.settings.masterVolume, label: L10n.string("master.title")) { model.setMasterVolume($0) }
             LevelMeter(level: model.masterLevel)
                 .padding(.leading, 18)
                 .padding(.trailing, 44)
