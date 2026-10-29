@@ -75,6 +75,16 @@ final class ProtocolTests: XCTestCase {
         XCTAssertEqual(settings.knownDevices.first?.lastSeen, Date(timeIntervalSinceReferenceDate: 300))
     }
 
+    func testKnownDeviceVolumeIsOptionalAndPersisted() throws {
+        let legacy = try JSONDecoder().decode(AppSettings.self, from: Data(#"{"knownDevices":[{"id":"A","name":"iPhone","lastSeen":10}]}"#.utf8))
+        XCTAssertNil(legacy.knownDevices.first?.volume)
+
+        var settings = legacy
+        settings.knownDevices[0].volume = 0.333
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(settings))
+        XCTAssertEqual(decoded.knownDevices.first?.volume, 0.333)
+    }
+
     func testHotkeyValidation() {
         XCTAssertNil(Hotkey.validated(keyCode: 8, flags: [.command]))
         XCTAssertNotNil(Hotkey.validated(keyCode: 46, flags: [.control, .option]))

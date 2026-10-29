@@ -77,6 +77,7 @@ struct KnownDevice: Codable, Equatable, Identifiable {
     var id: String
     var name: String
     var lastSeen: Date
+    var volume: Double? = nil
 }
 
 struct AppSettings: Codable, Equatable {

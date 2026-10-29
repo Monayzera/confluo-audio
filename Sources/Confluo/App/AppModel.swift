@@ -316,9 +316,15 @@ final class AppModel: RAOPSessionDelegate {
         if source.kind == .mac {
             settings.macVolume = source.volume
         } else {
+            rememberVolume(of: source)
             scheduleRemoteVolume(for: source)
         }
         applyGains()
+    }
+
+    private func rememberVolume(of source: SourceItem) {
+        guard let index = settings.knownDevices.firstIndex(where: { $0.id == source.identifier }) else { return }
+        settings.knownDevices[index].volume = source.volume
     }
 
     func toggleMute(_ source: SourceItem) {
@@ -559,9 +565,11 @@ final class AppModel: RAOPSessionDelegate {
 
     func sessionDidBegin(_ session: RAOPSession, sender: SenderInfo) {
         guard source(for: session) == nil else { return }
-        let item = SourceItem(kind: .airPlay, slot: sender.slot, name: sender.name, volume: 1.0, muted: false, sender: sender)
+        let known = settings.knownDevices.firstIndex(where: { $0.id == sender.identifier || $0.name.caseInsensitiveCompare(sender.name) == .orderedSame })
+        let volume = known.flatMap { settings.knownDevices[$0].volume } ?? 0.5
+        let item = SourceItem(kind: .airPlay, slot: sender.slot, name: sender.name, volume: min(max(volume, 0), 1), muted: false, sender: sender)
         sources.append(item)
-        if let index = settings.knownDevices.firstIndex(where: { $0.id == sender.identifier || $0.name.caseInsensitiveCompare(sender.name) == .orderedSame }) {
+        if let index = known {
             settings.knownDevices[index].id = sender.identifier
             settings.knownDevices[index].name = sender.name
             settings.knownDevices[index].lastSeen = Date()
@@ -582,6 +590,7 @@ final class AppModel: RAOPSessionDelegate {
             return
         }
         item.volume = volume
+        rememberVolume(of: item)
         applyGains()
     }
 
