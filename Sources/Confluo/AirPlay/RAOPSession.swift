@@ -327,7 +327,7 @@ final class RAOPSession {
                 sessionID: id,
                 slot: slot,
                 name: senderName,
-                identifier: deviceIdentifier ?? dacpID ?? senderName,
+                identifier: deviceIdentifier ?? senderName,
                 dacpID: dacpID,
                 activeRemote: activeRemote
             )

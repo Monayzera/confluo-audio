@@ -60,6 +60,21 @@ final class ProtocolTests: XCTestCase {
         XCTAssertEqual(parsed.codec, .pcm16BigEndian(sampleRate: 44_100, channels: 2))
     }
 
+    func testKnownDevicesAreDeduplicatedByName() throws {
+        let json = """
+        {"knownDevices":[
+          {"id":"40AF8431FE49CAA8","name":"iPhone de Gustavo","lastSeen":100},
+          {"id":"2DEC5AF42BB63DE5","name":"iPhone de Gustavo","lastSeen":300},
+          {"id":"C6476AE4BD2EA4B7","name":"iphone de gustavo","lastSeen":200},
+          {"id":"4C9B13CAB4AA0983","name":"iPad","lastSeen":50}
+        ]}
+        """
+        let settings = try JSONDecoder().decode(AppSettings.self, from: Data(json.utf8))
+        XCTAssertEqual(settings.knownDevices.map(\.name), ["iPhone de Gustavo", "iPad"])
+        XCTAssertEqual(settings.knownDevices.first?.id, "2DEC5AF42BB63DE5")
+        XCTAssertEqual(settings.knownDevices.first?.lastSeen, Date(timeIntervalSinceReferenceDate: 300))
+    }
+
     func testHotkeyValidation() {
         XCTAssertNil(Hotkey.validated(keyCode: 8, flags: [.command]))
         XCTAssertNotNil(Hotkey.validated(keyCode: 46, flags: [.control, .option]))

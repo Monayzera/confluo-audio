@@ -561,7 +561,8 @@ final class AppModel: RAOPSessionDelegate {
         guard source(for: session) == nil else { return }
         let item = SourceItem(kind: .airPlay, slot: sender.slot, name: sender.name, volume: 1.0, muted: false, sender: sender)
         sources.append(item)
-        if let index = settings.knownDevices.firstIndex(where: { $0.id == sender.identifier }) {
+        if let index = settings.knownDevices.firstIndex(where: { $0.id == sender.identifier || $0.name.caseInsensitiveCompare(sender.name) == .orderedSame }) {
+            settings.knownDevices[index].id = sender.identifier
             settings.knownDevices[index].name = sender.name
             settings.knownDevices[index].lastSeen = Date()
         } else {

@@ -108,6 +108,18 @@ struct AppSettings: Codable, Equatable {
         return bytes.map { String(format: "%02X", $0) }.joined()
     }
 
+    static func deduplicated(_ devices: [KnownDevice]) -> [KnownDevice] {
+        var byName: [String: KnownDevice] = [:]
+        for device in devices {
+            let key = device.name.lowercased()
+            if let existing = byName[key], existing.lastSeen >= device.lastSeen {
+                continue
+            }
+            byName[key] = device
+        }
+        return byName.values.sorted { $0.lastSeen > $1.lastSeen }
+    }
+
     var hardwareAddressData: Data {
         var data = Data()
         var index = hardwareAddress.startIndex
@@ -137,7 +149,7 @@ struct AppSettings: Codable, Equatable {
         notifyOnDisconnect = try container.decodeIfPresent(Bool.self, forKey: .notifyOnDisconnect) ?? defaults.notifyOnDisconnect
         notifyOnError = try container.decodeIfPresent(Bool.self, forKey: .notifyOnError) ?? defaults.notifyOnError
         hotkeys = try container.decodeIfPresent([HotkeyAction: Hotkey].self, forKey: .hotkeys) ?? defaults.hotkeys
-        knownDevices = try container.decodeIfPresent([KnownDevice].self, forKey: .knownDevices) ?? []
+        knownDevices = AppSettings.deduplicated(try container.decodeIfPresent([KnownDevice].self, forKey: .knownDevices) ?? [])
         hardwareAddress = try container.decodeIfPresent(String.self, forKey: .hardwareAddress) ?? defaults.hardwareAddress
         appliedLaunchAtLoginDefault = try container.decodeIfPresent(Bool.self, forKey: .appliedLaunchAtLoginDefault) ?? false
     }
