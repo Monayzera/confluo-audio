@@ -40,7 +40,7 @@
 	<key>SUFeedURL</key>
 	<string>https://github.com/Monayzera/confluo-audio/releases/latest/download/appcast.xml</string>
 	<key>SUPublicEDKey</key>
-	<string>3pYhsJhUYHZV/5huEw0uflnSz2ranNj16ilzxvft8SQ=</string>
+	<string>bB88+T/GvL6yQHbl4WCQCHlDZ356GxXxCFQIPOiqV0I=</string>
 	<key>SUEnableAutomaticChecks</key>
 	<true/>
 	<key>SUScheduledCheckInterval</key>
