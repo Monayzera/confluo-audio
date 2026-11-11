@@ -169,7 +169,13 @@ struct SettingsPage: View {
                 TextField(L10n.string("settings.receiverName"), text: $name, prompt: Text(model.defaultReceiverName))
                     .onSubmit { commitName() }
                     .onChange(of: name) { _, _ in scheduleName() }
-                ReceiverStatusLabel(model: model)
+                HStack {
+                    ReceiverStatusLabel(model: model)
+                    Spacer()
+                    Button(L10n.string("action.restartReceiver")) {
+                        model.restartReceiver()
+                    }
+                }
             } header: {
                 Text(L10n.string("settings.receiver"))
             } footer: {

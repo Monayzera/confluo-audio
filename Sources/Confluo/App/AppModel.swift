@@ -106,6 +106,7 @@ final class AppModel: RAOPSessionDelegate {
     @ObservationIgnored private var remoteVolumeWork: [UUID: DispatchWorkItem] = [:]
     @ObservationIgnored private var remoteVolumeSentAt: [UUID: Date] = [:]
     @ObservationIgnored private var started = false
+    @ObservationIgnored private var lastRestart = Date.distantPast
     @ObservationIgnored private var outputRunning = false
     @ObservationIgnored private var lastErrorSource: ErrorSource = .general
     @ObservationIgnored private var lastNotifiedError: (message: String, date: Date)?
@@ -234,6 +235,35 @@ final class AppModel: RAOPSessionDelegate {
         capture?.stopSynchronously()
         mixer?.stop()
         dacp.stop()
+    }
+
+    func restartReceiver() {
+        guard started, let server, let mixer else { return }
+        let now = Date()
+        guard now.timeIntervalSince(lastRestart) > 1.5 else { return }
+        lastRestart = now
+        capture?.stop()
+        if settings.captureMacAudio {
+            captureState = .starting
+        }
+        server.stop()
+        dacp.stop()
+        mixer.stop()
+        do {
+            try mixer.start()
+            outputRunning = true
+            outputDeviceName = CoreAudioQuery.deviceName(mixer.device) ?? ""
+            clearError(from: .output)
+        } catch {
+            outputRunning = false
+            captureState = settings.captureMacAudio ? .failed : .off
+            report(L10n.format("error.output", error.localizedDescription), source: .output)
+        }
+        server.start(name: receiverName)
+        dacp.start()
+        if settings.captureMacAudio && outputRunning {
+            startCapture()
+        }
     }
 
     func meterClientAppeared() {
@@ -525,6 +555,8 @@ final class AppModel: RAOPSessionDelegate {
             onOpenMixerRequest?()
         case .checkForUpdates:
             updater.checkForUpdates()
+        case .restartReceiver:
+            restartReceiver()
         }
     }
 

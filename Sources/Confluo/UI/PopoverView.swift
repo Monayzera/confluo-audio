@@ -15,6 +15,16 @@ struct PopoverView: View {
                 Spacer()
                 HStack(spacing: 6) {
                     Button {
+                        model.restartReceiver()
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                            .frame(width: 16, height: 14)
+                    }
+                    .glassControl()
+                    .help(L10n.string("action.restartReceiver"))
+                    .accessibilityLabel(L10n.string("action.restartReceiver"))
+
+                    Button {
                         openWindow(.mixer)
                     } label: {
                         Image(systemName: "macwindow")

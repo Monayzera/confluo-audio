@@ -106,3 +106,5 @@
 "update.available" = "Confluo %@ is available";
 "update.available.body" = "Open Confluo from the menu bar to install it.";
 "update.install" = "Install";
+"action.restartReceiver" = "Restart connection";
+"hotkey.restartReceiver" = "Restart connection";
